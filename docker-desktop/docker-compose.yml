@@ -1,0 +1,191 @@
+services:
+  mongo1:
+    image: mongo:6.0.12
+    command: ["--replSet", "spatial-repo", "--bind_ip_all", "--port", "27017"]
+    deploy:
+      resources:
+        limits:
+          cpus: '4.00'
+          memory: 4096M
+        reservations:
+          cpus: '0.25'
+          memory: 2048M
+    healthcheck:
+      test: echo "try { rs.status() } catch (err) { rs.initiate({_id:'spatial-repo',members:[{_id:0,host:'host.docker.internal:27017'}]}) }" | mongosh --port 27017 --quiet
+      interval: 10s
+      timeout: 30s
+      retries: 5
+      start_period: 40s
+    ports:
+      - "27017:27017"
+    volumes:
+      - "mongo1_data:/data/db"
+      - "mongo1_config:/data/configdb"
+    restart: always
+
+  spatialmanager-service:
+    image: ${IMAGE_REGISTRY}/spatialmanager-service:${TAG}
+    depends_on:
+      - namedresource-service
+    deploy:
+      resources:
+        limits:
+          cpus: '4.00'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    ports:
+      - "8010:8080"
+      - "8011:8081"
+      - "8015:5005"
+    environment:
+      - OAUTH2.ENABLED=FALSE
+      - OAUTH2.ISSUERURI=https://keycloak.example.com
+      - OAUTH2.CLIENTID=spatial
+      # Use: export OAUTH2_CLIENT_SECRET=<your-secret> before running docker-compose
+      - OAUTH2.CLIENTSECRET=${OAUTH2_CLIENT_SECRET}
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+
+  samples-data:
+    image: ${IMAGE_REGISTRY}/samples-data:${TAG}
+    depends_on:
+      - mongo1
+    deploy:
+      resources:
+        limits:
+          cpus: '4.00'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    ports:
+      - "8075:5005"
+    environment:
+      - SPRING_DATA_MONGODB_URI=mongodb://mongo1:27017/spatial-repository?replicaSet=spatial-repo
+      - samples.force.update=false
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+    volumes:
+      - type: bind
+        source: ${SPATIAL_PATH}
+        target: "/opt/data"
+
+  namedresource-service:
+    image: ${IMAGE_REGISTRY}/namedresource-service:${TAG}
+    depends_on:
+      - mongo1
+    deploy:
+      resources:
+        limits:
+          cpus: '4.00'
+          memory: 1024M
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+    ports:
+      - "8050:8080"
+      - "8051:8081"
+      - "8055:5005"
+    environment:
+      - SPRING_DATA_MONGODB_URI=mongodb://mongo1:27017/spatial-repository?replicaSet=spatial-repo
+      - OAUTH2.ENABLED=FALSE
+      - OAUTH2.ISSUERURI=https://keycloak.example.com
+      - OAUTH2.CLIENTID=spatial
+      # Use: export OAUTH2_CLIENT_SECRET=<your-secret> before running docker-compose
+      - OAUTH2.CLIENTSECRET=${OAUTH2_CLIENT_SECRET}
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+    volumes:
+      - type: bind
+        source: ${SPATIAL_PATH}
+        target: "/opt/data"
+
+  feature-service:
+    image: ${IMAGE_REGISTRY}/feature-service:${TAG}
+    profiles: ["all"]
+    depends_on:
+      - mongo1
+    deploy:
+      resources:
+        limits:
+          cpus: '4.00'
+          memory: 2048M
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+    ports:
+      - "8040:8080"
+      - "8041:8081"
+      - "8045:5005"
+    environment:
+      - SPRING_DATA_MONGODB_URI=mongodb://mongo1:27017/spatial-repository?replicaSet=spatial-repo
+      - OAUTH2.ENABLED=FALSE
+      - OAUTH2.ISSUERURI=https://keycloak.example.com
+      - OAUTH2.CLIENTID=spatial
+      # Use: export OAUTH2_CLIENT_SECRET=<your-secret> before running docker-compose
+      - OAUTH2.CLIENTSECRET=${OAUTH2_CLIENT_SECRET}
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+    volumes:
+      - type: bind
+        source: ${SPATIAL_PATH}
+        target: "/opt/data"
+
+  mapping-service:
+    image: ${IMAGE_REGISTRY}/mapping-service:${TAG}
+    depends_on:
+      - mongo1
+    deploy:
+      resources:
+        limits:
+          cpus: '4.00'
+          memory: 1024M
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+    ports:
+      - "8032:8080"
+      - "8031:8081"
+      - "8035:5005"
+    environment:
+      - SPRING_DATA_MONGODB_URI=mongodb://mongo1:27017/spatial-repository?replicaSet=spatial-repo
+      - OAUTH2.ENABLED=FALSE
+      - OAUTH2.ISSUERURI=https://keycloak.example.com
+      - OAUTH2.CLIENTID=spatial
+      # Use: export OAUTH2_CLIENT_SECRET=<your-secret> before running docker-compose
+      - OAUTH2.CLIENTSECRET=${OAUTH2_CLIENT_SECRET}
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+    volumes:
+      - type: bind
+        source: ${SPATIAL_PATH}
+        target: "/opt/data"
+  tiling-service:
+    image: ${IMAGE_REGISTRY}/tiling-service:${TAG}
+    profiles: ["all"]
+    depends_on:
+      - mongo1
+    deploy:
+      resources:
+        limits:
+          cpus: '4.00'
+          memory: 1024M
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+    ports:
+      - "8060:8080"
+      - "8061:8081"
+      - "8065:5005"
+    environment:
+      - SPRING_DATA_MONGODB_URI=mongodb://mongo1:27017/spatial-repository?replicaSet=spatial-repo
+      - OAUTH2.ENABLED=FALSE
+      - OAUTH2.ISSUERURI=https://keycloak.example.com
+      - OAUTH2.CLIENTID=spatial
+      # Use: export OAUTH2_CLIENT_SECRET=<your-secret> before running docker-compose
+      - OAUTH2.CLIENTSECRET=${OAUTH2_CLIENT_SECRET}
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+    volumes:
+      - type: bind
+        source: ${SPATIAL_PATH}
+        target: "/opt/data"
+volumes:
+  mongo1_data:
+  mongo1_config:
