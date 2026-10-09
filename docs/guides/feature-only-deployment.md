@@ -13,19 +13,19 @@ A PVC is still required in this deployment
 ## Prepare your customized values file
 Make a copy of [deploy/feature-only-deployment-values.yaml](../../deploy/feature-only-deployment-values.yaml). Customize the settings based on your environment and needs, such as docker image registry url, ingress host etc.
 
-> Also, for more information, refer to the comments in [values.yaml](../../charts/private-spatial-apis/values.yaml)
+> Also, for more information, refer to the comments in [values.yaml](../../charts/precisely-spatial-sdk/values.yaml)
 
 ## Installation of Precisely Spatial SDK Helm Chart
 Deploy the charts with the values yaml file
 
 ```
-helm install spatial ~/charts/private-spatial-apis -f your-values.yaml
+helm install spatial-sdk ~/charts/Spatial-SDK -f your-values.yaml
 ```
 
 Or generate Kubernetes manifest file and use kubectl to deploy
 
 ```
-helm template ~/charts/private-spatial-apis -f your-values.yaml > spatial-deployment.yaml
+helm template ~/charts/Spatial-SDK -f your-values.yaml > spatial-deployment.yaml
 ```
 
 ```

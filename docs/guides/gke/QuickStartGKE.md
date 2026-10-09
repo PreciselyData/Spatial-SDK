@@ -26,7 +26,7 @@ helm -h
 
 ### Clone Precisely Spatial SDK helm charts & resources
 ```
-git clone https://github.com/PreciselyData/Private-Spatial-APIs
+git clone https://github.com/PreciselyData/Spatial-SDK.git
 ```
 
 ## Step 2: Create K8s Cluster (GKE)
@@ -119,15 +119,15 @@ Due to the disk space limitation on cloudshell, you need to unzip the image file
 
 Run the shell scripts to load images to artifact registry,
 ```
-chmod a+x ~/Private-Spatial-APIs/scripts/gke/push-images.sh
+chmod a+x ~/Spatial-SDK/scripts/gke/push-images.sh
 ```
 ```
-~/Private-Spatial-APIs/scripts/gke/push-images.sh <your registry url> <spatial_analytics_docker_images_dir>
+~/Spatial-SDK/scripts/gke/push-images.sh <your registry url> <spatial_analytics_docker_images_dir>
 ```
 
 you can also load images one by one if there's no enough disk space available (restart the cloudshell may release more disk space).
 ```
-~/Private-Spatial-APIs/scripts/gke/push-images.sh <your registry url> <tar file name without ext> <spatial_analytics_docker_images_dir>
+~/Spatial-SDK/scripts/gke/push-images.sh <your registry url> <tar file name without ext> <spatial_analytics_docker_images_dir>
 ```
 
 List images in the artifact registry
@@ -156,7 +156,7 @@ We will use `standard-rwx` auto provisioner to provision a PV through a PVC. The
 
 Create a PVC that dynamically provisioning a PV using standard-rwx storage class,
 ```
-kubectl apply -f ~/Private-Spatial-APIs/deploy/gke/pvc.yaml
+kubectl apply -f ~/Spatial-SDK/deploy/gke/pvc.yaml
 ```
 Check results, the pvc status will become `Bound` after service pods are deployed.
 ```
@@ -179,7 +179,7 @@ If you don't have a MongoDB replica set currently, for your convenience, you can
 
 Install MongoDB from helm chart
 ```
-helm install mongo ~/Private-Spatial-APIs/charts/mongo-standalone -n mongo --create-namespace
+helm install mongo ~/Spatial-SDK/charts/mongo-standalone -n mongo --create-namespace
 ```
 ```
 kubectl get pod -n mongo
@@ -200,25 +200,25 @@ connection uri = mongodb://mongo-svc.mongo.svc.cluster.local/spatial-repository?
 
 ### Deploy Spatial Services
 
-There are two deployment files to choose from that require different amount of resources (CPU and Memory). Start from the small one (`~/Private-Spatial-APIs/deploy/gitlab-deployment-small-values.yaml`). A production deployment should use `~/Private-Spatial-APIs/deploy/gitlab-deployment-values.yaml`.
+There are two deployment files to choose from that require different amount of resources (CPU and Memory). Start from the small one (`~/Spatial-SDK/deploy/gitlab-deployment-small-values.yaml`). A production deployment should use `~/Spatial-SDK/deploy/gitlab-deployment-values.yaml`.
 
 > NOTE: if you are not using MongoDB deployed from this guide, you need to update the mongo uri in the values file before install.
 
 ```
-helm install spatial ~/Private-Spatial-APIs/charts/precisely-spatial-sdk \
-     -f ~/Private-Spatial-APIs/deploy/gitlab-deployment-small-values.yaml \
+helm install spatial-sdk ~/Spatial-SDK/charts/precisely-spatial-sdk \
+     -f ~/Spatial-SDK/deploy/gitlab-deployment-small-values.yaml \
      --set global.registry.secrets=null \
      --set global.registry.url=<your registry url>
 ```
 Wait until all services are ready. It may take 5 to 8 minutes to get ready for the first time. 
 ```
-kubectl get pod
+kubectl get pod -n spatial-sdk
 ```
 
 You can also deploy services with hpa enabled, here is an example (check [gitlab-deployment-values.yaml](../../../deploy/gitlab-deployment-values.yaml) for more details),
 ```
-helm install spatial ~/Private-Spatial-APIs/charts/precisely-spatial-sdk \
-     -f ~/Private-Spatial-APIs/deploy/gitlab-deployment-values.yaml \
+helm install spatial-sdk ~/Spatial-SDK/charts/precisely-spatial-sdk \
+     -f ~/Spatial-SDK/deploy/gitlab-deployment-values.yaml \
      --set global.registry.secrets=null \
      --set global.registry.url=<your registry url> \
      --set mapping-service.hpaEnabled=true \
@@ -268,7 +268,7 @@ kubectl get svc -n ingress-nginx
 looking for the EXTERNAL-IP in the output for the value of `hostname` used in the next command.
 
 ```
-helm install keycloak ~/Private-Spatial-APIs/charts/keycloak-standalone -n keycloak --create-namespace \
+helm install keycloak ~/Spatial-SDK/charts/keycloak-standalone -n keycloak --create-namespace \
   --set hostname=<ingress external ip> \
   --set adminUser=<your-admin-username> \
   --set adminPassword=<your-secure-password>
@@ -284,7 +284,7 @@ Open a browser and login to keycloak console with your admin credentials at
 
 Precisely Spatial SDK has a realm template (realm-spatial.json) that helps to setup the required realm configuration and spatial client settings. Precisely Spatial SDK authenticate with realm users and authorize with spatial client roles and resource permissions. All resource permissions (ACLs) are managed in spatial client through UMA API.
 
-Download `~/Private-Spatial-APIs/deploy/realm-spatial.json` to your local system.
+Download `~/Spatial-SDK/deploy/realm-spatial.json` to your local system.
 In the administration console, click on realm pulldown menu and select `Create realm`
 
 Click on `Browse...` button, select the realm file `realm-spatial.json`, give a name to the new realm (use all lowercase name, e.g. `development`) and click the `Create` (do not double clicks).
@@ -348,7 +348,7 @@ There are various utilities for:
 More details on Spatial Utilities can be found [here](../../guides/spatial-utilities.md). -->
 
 ## Next Sections
-- [Precisely Spatial SDK Usage](../../../charts/private-spatial-apis/README.md)
+- [Precisely Spatial SDK Usage](../../../charts/Spatial-SDK/README.md)
 - [Metrics](../../Metrics.md#generating-insights-from-metrics)
 - [FAQs](../../faq/FAQs.md)
 

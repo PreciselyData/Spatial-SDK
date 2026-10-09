@@ -17,9 +17,9 @@ This guide is applicable in the following situations:
 helm repo update
 
 ## apply the changes values.yaml file AND upgrade the chart to newer version
-helm upgrade --install spatial-analytics ./charts/private-spatial-apis \
+helm upgrade --install spatial-sdk ./charts/Spatial-SDK \
 --dependency-update \
---namespace spatial-analytics --create-namespace \
+--namespace spatial-sdk --create-namespace \
 --version [updated-version]
 ```
 

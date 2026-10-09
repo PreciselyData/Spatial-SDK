@@ -21,7 +21,7 @@ To deploy Precisely Spatial SDK application in AWS EKS, install the following cl
 
 ### Clone Precisely Spatial SDK helm charts & resources
 ```
-git clone https://github.com/PreciselyData/Private-Spatial-APIs
+git clone https://github.com/PreciselyData/Spatial-SDK.git
 ```
 
 ## Step 2: Create K8s Cluster (EKS)
@@ -105,13 +105,13 @@ aws ecr get-login-password --region <aws-region> | docker login --username AWS -
 
 Run the shell script to push images to ECR:
 ```shell
-chmod a+x ~/Private-Spatial-APIs/scripts/eks/push-images.sh
-~/Private-Spatial-APIs/scripts/eks/push-images.sh <aws-account-id>.dkr.ecr.<aws-region>.amazonaws.com <spatial_analytics_docker_images_dir>
+chmod a+x ~/Spatial-SDK/scripts/eks/push-images.sh
+~/Spatial-SDK/scripts/eks/push-images.sh <aws-account-id>.dkr.ecr.<aws-region>.amazonaws.com <spatial_analytics_docker_images_dir>
 ```
 
 You can also load images one by one if there is not enough disk space available:
 ```shell
-~/Private-Spatial-APIs/scripts/eks/push-images.sh <aws-account-id>.dkr.ecr.<aws-region>.amazonaws.com <tar file name without ext> <spatial_analytics_docker_images_dir>
+~/Spatial-SDK/scripts/eks/push-images.sh <aws-account-id>.dkr.ecr.<aws-region>.amazonaws.com <tar file name without ext> <spatial_analytics_docker_images_dir>
 ```
 
 List images in ECR:
@@ -189,15 +189,15 @@ You can check the result by executing:
 ```kubectl get sc```  
 
 #### Create a PVC  
-We will deploy Precisely Spatial SDK into a new namespace 'spatial-analytics', so create a namespace first,  
-```kubectl create ns spatial-analytics```
+We will deploy Precisely Spatial SDK into a new namespace 'spatial-sdk', so create a namespace first,  
+```kubectl create ns spatial-sdk```
 
 Create a PVC in the namespace that dynamically provisioning a PV using efs-sc storage class,  
 
-```kubectl apply -f ./deploy/eks/efs-pvc.yaml -n spatial-analytics```  
+```kubectl apply -f ./deploy/eks/efs-pvc.yaml -n spatial-sdk```  
 
 Check results, wait until the pvc status becomes Bound.  
-```kubectl get pvc -n spatial-analytics```
+```kubectl get pvc -n spatial-sdk```
 
 ## Step 5: Prepare a database for repository
 > NOTE: if you only need Feature service, you may skip step 5,6 see [Feature only deployment](../../guides/feature-only-deployment.md).
@@ -231,30 +231,30 @@ connection uri = mongodb://mongo-svc.mongo.svc.cluster.local/spatial-repository?
 ```
 ## Step 6: Installation of Precisely Spatial SDK Helm Chart
 
-> NOTE: For every helm chart version update, make sure you run the [Step 3](#step-3-download-private-spatial-apis-docker-images) for uploading the docker images with the newest tag.
+> NOTE: For every helm chart version update, make sure you run the [Step 3](#step-3-download-Spatial-SDK-docker-images) for uploading the docker images with the newest tag.
 
-There are two deployment files to choose from that require different amount of resources (CPU and Memory). Use `deploy/gitlab-deployment-small-values.yaml` for trying out the APIs. A production deployment should use `Private-Spatial-APIs/deploy/gitlab-deployment-values.yaml`.
+There are two deployment files to choose from that require different amount of resources (CPU and Memory). Use `deploy/gitlab-deployment-small-values.yaml` for trying out the APIs. A production deployment should use `Spatial-SDK/deploy/gitlab-deployment-values.yaml`.
 
 Create a secret for pulling image from ECR repository  
 ```shell
-kubectl create secret docker-registry regcred --docker-server=[account_id].dkr.ecr.[aws_region].amazonaws.com   --docker-username=AWS   --docker-password=$(aws ecr get-login-password --region [aws-reqion]) --namespace=spatial-analytics
+kubectl create secret docker-registry regcred --docker-server=[account_id].dkr.ecr.[aws_region].amazonaws.com   --docker-username=AWS   --docker-password=$(aws ecr get-login-password --region [aws-reqion]) --namespace=spatial-sdk
 ```
 To install/upgrade the Precisely Spatial SDK helm chart, use the following command:
 
 ```shell
-helm install spatial-analytics ~/Private-Spatial-APIs/charts/precisely-spatial-sdk \
- -f ~/Private-Spatial-APIs/deploy/gitlab-deployment-values.yaml \
+helm install spatial-sdk ~/Spatial-SDK/charts/precisely-spatial-sdk \
+ -f ~/Spatial-SDK/deploy/gitlab-deployment-values.yaml \
  --set "global.ingress.host=[ingress-host-name]" \
  --set "repository.mongodb.url=[mongodb-url]" \ 
  --set "global.registry.url=[aws-account-id].dkr.ecr.[aws-region].amazonaws.com" \
  --set "global.registry.tag=2.0.0" \ 
  --set "global.registry.secrets=regcred" \ 
-  --namespace spatial-analytics   
+  --namespace spatial-sdk   
 ```
 
 This should install Precisely Spatial SDK and set up a sample dataset that can be used to play around with the product.
 
-> Also, for more information, refer to the comments in [values.yaml](../../../charts/private-spatial-apis/values.yaml)
+> Also, for more information, refer to the comments in [values.yaml](../../../charts/Spatial-SDK/values.yaml)
 #### Mandatory Parameters
 * ``global.ingress.host``: The Host name of Ingress e.g. http://aab329b2d767544.us-east-1.elb.amazonaws.com
 * ``repository.mongodb.url``: The Mongo DB connection URI e.g. mongodb+srv://<username>:<password>@mongo-svc.mongo.svc.cluster.local/spatial-repository?authSource=admin&ssl=false 
@@ -262,13 +262,13 @@ This should install Precisely Spatial SDK and set up a sample dataset that can b
 * ``global.registry.tag``: The docker image tag value e.g. 2.0.0 or latest.
 * ``global.registry.secrets``: The name of the secret holding ECR credential information.
 
-For more information on helm values, follow [this link](../../../charts/private-spatial-apis/README.md).  
+For more information on helm values, follow [this link](../../../charts/Spatial-SDK/README.md).  
 
 > NOTE: In case Helm chart deployment is not possible, check [here](../../guides/helm-template.md) for Kubernetes manifest deployment. 
 
 Once you run Precisely Spatial SDK helm install/upgrade command, it might take few minutes to get ready for the first time. You can run the following command to check the creation of pods. Please wait until all the pods are in running state:
 ```shell
-kubectl get pods -w --namespace spatial-analytics 
+kubectl get pods -w --namespace spatial-sdk 
 ```
 
 When all the pods are up, you can run the following command to check the ingress service host:
@@ -277,7 +277,7 @@ kubectl get services -o wide  nginx-ingress-ingress-nginx-controller
 ```
 
 
-After all the pods in namespace 'spatial-analytics' are in 'ready' status, launch SpatialServerManager in a browser with the URL below (You may need to accept the default self-signed certificate from Ingress. Check out the ingress document on how to change the certificate if you need). By default, the security is off, so you can log in with any username/password. You should be able to browser named resources and pre-view maps. The link to Spatial Manager: `https://<your external ip>/SpatialServerManager`
+After all the pods in namespace 'spatial-sdk' are in 'ready' status, launch SpatialServerManager in a browser with the URL below (You may need to accept the default self-signed certificate from Ingress. Check out the ingress document on how to change the certificate if you need). By default, the security is off, so you can log in with any username/password. You should be able to browser named resources and pre-view maps. The link to Spatial Manager: `https://<your external ip>/SpatialServerManager`
 
 
 You can check HPA status while services are running
@@ -317,7 +317,7 @@ kubectl get svc
 looking for the EXTERNAL-IP in the output for the value of `hostname` used in the next command.
 
 ```
-helm install keycloak ~/Private-Spatial-APIs/charts/keycloak-standalone -n keycloak --create-namespace \
+helm install keycloak ~/Spatial-SDK/charts/keycloak-standalone -n keycloak --create-namespace \
   --set hostname=<ingress external ip> \
   --set adminUser=<your-admin-username> \
   --set adminPassword=<your-secure-password>
@@ -333,7 +333,7 @@ Open a browser and login to keycloak console with your admin credentials at
 
 Precisely Spatial SDK has a realm template (realm-spatial.json) that helps to setup the required realm configuration and spatial client settings. Precisely Spatial SDK authenticate with realm users and authorize with spatial client roles and resource permissions. All resource permissions (ACLs) are managed in spatial client through UMA API.
 
-Download `Private-Spatial-APIs/deploy/realm-spatial.json` to your local system.
+Download `Spatial-SDK/deploy/realm-spatial.json` to your local system.
 In the administration console, click on realm pulldown menu and select `Create realm`
 
 Click on `Browse...` button, select the realm file `realm-spatial.json`, give a name to the new realm (use all lowercase name, e.g. `development`) and click the `Create` (do not double clicks).
@@ -350,7 +350,7 @@ In your newly created realm, update and copy both client secrets:
 
 ### Update service config to use your realm in the keycloak
 ```
-kubectl edit cm spatial-config -n spatial-analytics
+kubectl edit cm spatial-config -n spatial-sdk
 ```
 Update the following properties with the values below,
 ```
@@ -367,11 +367,11 @@ spring.security.oauth2.resourceserver.jwt.issuer-uri: "http://<ingress external 
 
 Restart all services to pick up the configuration changes
 ```
-kubectl rollout restart deployment -n spatial-analytics 
+kubectl rollout restart deployment -n spatial-sdk 
 ```
 Wait for all pods are ready
 ```
-kubectl get pod -n spatial-analytics 
+kubectl get pod -n spatial-sdk 
 ```
 
 Login to Precisely Spatial when all services are ready with the password configured for `admin` in Keycloak.
@@ -397,7 +397,7 @@ There are various utilities for:
 More details on Spatial Utilities can be found [here](../../guides/spatial-utilities.md). -->
 
 ## Next Sections
-- [Precisely Spatial SDK Usage](../../../charts/private-spatial-apis/README.md)
+- [Precisely Spatial SDK Usage](../../../charts/Spatial-SDK/README.md)
 - [Metrics](../../Metrics.md#generating-insights-from-metrics)
 - [FAQs](../../faq/FAQs.md)
 
