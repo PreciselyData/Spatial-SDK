@@ -156,7 +156,7 @@ kubectl get nodes
 ```
 ```shell
 NAME                                STATUS   ROLES   AGE    VERSION
-aks-agentpool-39271417-vmss000000   Ready    <none>  106s   v1.29.2
+aks-agentpool-39271417-vmss000000   Ready    <none>  106s   v1.36.0
 ```
 
 ###  2.3 Install Ingress-NGINX controller
