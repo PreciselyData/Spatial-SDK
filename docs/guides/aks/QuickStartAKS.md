@@ -1,15 +1,21 @@
 # Installing Precisely Spatial SDK Helm Chart on Azure AKS
 
-## **Before starting**
+---
+
+## Before starting
 
 Make sure you have the following items before starting:
+
 - Access tokens to Docker image registry.
-- A subscription that can be used to create Storage account, K8 cluster, file share. 
+- A subscription that can be used to create Storage account, K8 cluster, file share.
 
 It is recommended to use a single Azure subscription to complete this tutorial. To make it easier, this tutorial is based on Azure portal and
 Azure Cloud Shell (Bash). In order to achieve the best performance, create all resources in the same region.
 
+---
+
 ## Preview
+
 - [Step 1: Prepare your environment](#step-1-prepare-your-environment)
 - [Step 2: Create a AKS Cluster ](#step-2-create-k8s-cluster-aks)
 - [Step 3: Download Precisely Spatial SDK Docker Images](#step-3-download-precisely-spatial-sdk-docker-images)
@@ -19,38 +25,49 @@ Azure Cloud Shell (Bash). In order to achieve the best performance, create all r
 - [Step 7: Enabling security - AuthN/AuthZ (Optional)](#step-7-enabling-security---authnauthz-optional)
 <!-- - [Step 8: Use Spatial Utilities](#step-8-use-spatial-utilities) -->
 
+---
+
 ## Step 1: Prepare your environment
+
 To deploy Precisely Spatial SDK application in Azure AKS, install the following client tools on you machine:
+
 - [Docker](https://docs.docker.com/engine/install/)
 - [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/)
 
 Above tools are required to push docker images to Azure Container Registry.
 
 ### Setup Cloud Shell
+
 Login to [Microsoft Azure Portal](https://portal.azure.com/)
-\
+
 Open Cloud Shell by clicking on the icon on the toolbar.
-\
+
 Verify the following utilities,
-```
+
+```shell
 az version 
 ```
-```
+
+```shell
 kubectl version 
 ```
-```
+
+```shell
 helm version 
 ```
 
-
 ### Clone Precisely Spatial SDK helm charts & resources
-```
+
+```shell
 git clone https://github.com/PreciselyData/Spatial-SDK.git
 ```
+
+---
 
 ## Step 2: Create K8s Cluster (AKS)
 
 You can create an AKS cluster or use an existing EKS cluster.
+
 -   [2.1 Create an AKS Cluster](#21-create-an-aks-cluster-)
 -   [2.2 Connect to AKS Cluster](#22-connect-to-aks-cluster)
 -   [2.3 Install Ingress-NGINX controller](#23-install-ingress-nginx-controller)
@@ -80,11 +97,13 @@ Now click on **Create** → **Create a Kubernetes Cluster**
 
 Create a new Resource group `spatial-aks` for this AKS cluster
 
-Kubernetes cluster name -> `spatial32`\
-Kubernetes version -> `1.36.0`\
-Node size -> Change size -> F32s_v2\
-Scale method -> `Manual`\
-Node count -> `1`
+| Setting | Value |
+| --- | --- |
+| Kubernetes cluster name | `spatial32` |
+| Kubernetes version | `1.36.0` |
+| Node size | Change size -> F32s_v2 |
+| Scale method | `Manual` |
+| Node count | `1` |
 
 > NOTE: Create tag if you want to manage resource usage by application tag
 
@@ -93,16 +112,18 @@ Click on **Create the AKS cluster** (It may take some time to get provisioned).
 ### 2.2 Connect to AKS Cluster
 
 We use Azure Cloud Shell (VM) as a bridge to manage the cluster and move data to the Fileshares. Alternatively, you can use [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli) on your machine.
-\
+
 At the home page of Azure portal, click on the Azure Cloud Shell icon (next to the search field), following the instructions to enable the Bash (you may need to create a storage Fileshares if you are first time using the Cloud Shell).
+
 #### Open Cloud Shell
+
 ![azure shell open](images/azure-shell-open.png "azure shell open")
 
 >NOTE: in the Bash windows, you can use ctrl-c to copy and shift-insert
 to paste.
 
-
 #### Set kubectl context to AKS cluster
+
 In Azure portal, go to
 
 spatial-aks → spatial32,and click on `Connect` to find the commands to add the context to kubectl.
@@ -139,6 +160,7 @@ aks-agentpool-39271417-vmss000000   Ready    <none>  106s   v1.29.2
 ```
 
 ###  2.3 Install Ingress-NGINX controller
+
 > Note: If you would like to setup TLS for HTTPS traffic follow official azure docs: https://docs.microsoft.com/en-us/azure/aks/ingress-tls?tabs=azure-cli
 
 The Precisely Spatial SDK services requires ingress controller setup. Run the following command in Cloud Shell for setting up NGINX ingress controller:
@@ -164,6 +186,8 @@ ingress-nginx-controller-admission   ClusterIP      10.0.134.147   <none>       
 ```
 
 > Make a note of `EXTERNAL-IP=23.96.127.58`, it will be used for later steps.
+
+---
 
 ## Step 3: Download Precisely Spatial SDK Docker Images
 
@@ -195,7 +219,7 @@ You can also load images one by one if there's no enough disk space available
 ~/Spatial-SDK/scripts/aks/push-images.sh <azure_container_registry>.azurecr.io <tar file name without ext> <spatial_analytics_docker_images_dir>
 ```
 List images in the registry:
-\
+
 ``az acr repository list --name <azure_container_registry> --output table``
 
 There are nine docker images which will be pushed to container registry:
@@ -209,8 +233,12 @@ There are nine docker images which will be pushed to container registry:
 8. data-service
 9. private-sdk-mcp
 
+---
+
 ## Step 4: Create a Persistent Volume
+
 A PV (Persistent Volume) is required to share files across all services (pods), including
+
 - File based Spatial data sets, such as Mapinfo TAB, Shape, GeoPackage and Geodatabase etc.
 - Tile cache
 - Map image cache
@@ -221,8 +249,7 @@ A PV (Persistent Volume) is required to share files across all services (pods), 
 This spatial data should be deployed using a [persistent volume](https://kubernetes.io/docs/concepts/storage/persistent-volumes/).
 The persistent volume is backed by Azure File share so that the data is ready to use immediately when the
 volume is mounted to the pods.
-\
-\
+
 By default, Azure File shares use SMB protocol that doesn't perform
 well with Precisely Spatial SDK deployment. We recommend the NFS protocol.
 Also, see:\
@@ -238,8 +265,7 @@ Subscription ID first.
 ```shell
 az feature register --name AllowNfsFileShares --namespace Microsoft.Storage --subscription 78f8b96e-f0bf-47a9-81b6-xxxxxx
 ```
-\
-\
+
 It may take an hour to get approved. Check and wait until the state
 becomes "**Registered**",
 
@@ -268,11 +294,13 @@ Click on [Azure Portal Home](https://portal.azure.com/#home) -> **Storage Accoun
 
 ![azure storage](images/azure-storage.png "azure storage")
 
-Storage Account → Create\
-Resource group → Create new → `spatial-fileshares`\
-Storage account name → `spatialstorage001`\
-Select performance → `Premium`\
-Select Premium account type → `File shares`
+| Setting | Value |
+| --- | --- |
+| Storage Account | Create |
+| Resource group | Create new → `spatial-fileshares` |
+| Storage account name | `spatialstorage001` |
+| Select performance | `Premium` |
+| Select Premium account type | `File shares` |
 
 Advanced → Security → Require secure transfer for REST API operations
 to allow HTTP → `Uncheck`\
@@ -282,12 +310,12 @@ Click -> `Create`
 ###  4.3 Configure virtual network
 
 In Azure portal, go to spatial-fileshares → spatialstorage001, select
-Networking,\
+Networking,
+
 ![storage aks networking](images/storage-connect-aks-network1.png "storage aks networking")
 
 Add existing virtual network from the resource group of spatial32 AKS
 cluster, so AKS cluster can access the NFS Fileshares.
-
 
 ![storage aks networking 2](images/storage-connect-aks-network2.png "storage aks networking 2")
 
@@ -313,15 +341,19 @@ capacity can be enlarged after creation. Select the NFS protocol
 Create the Fileshares.
 
 #### 4.5 Create PersistentVolume (PV) and PersistentVolumeClaim (PVC)
+
 In Cloud Shell, clone Precisely Spatial SDK repository.
+
 ```shell
 git clone https://github.com/PreciselyData/Spatial-SDK.git
 ```
+
 ```shell
 cd SpatialAnalytics/deploy/azure-aks
 ```
 
 ##### Create PV from the Fileshares
+
 If you used different names of resource group and storage account, find
 out the actual NFS server name and path as below and update the template
 before creating PV, otherwise, you can skip the following part.\
@@ -383,13 +415,14 @@ data-volume   100Gi      RWX            Retain           Available              
 In Cloud Shell, create the PVC from the template file **fileshare-pvc.yaml**
 
 ```shell
-kubectl create namespace spatial-analytics
-kubectl apply -f ~/Spatial-SDK/deploy/aks/fileshare-pvc.yaml -n spatial-analytics 
+kubectl create namespace spatial-sdk
+kubectl apply -f ~/Spatial-SDK/deploy/aks/fileshare-pvc.yaml -n spatial-sdk 
 ```
 
 To verify
+
 ```shell
-kubectl get pvc -n spatial-analytics
+kubectl get pvc -n spatial-sdk
 ```
 ```shell
 NAME                STATUS   VOLUME        CAPACITY   ACCESS MODES   STORAGECLASS   AGE
@@ -397,14 +430,16 @@ data-volume-claim   Bound    data-volume   100Gi      RWX                       
 ```
 Make sure the PVC is bound to the PV successfully.
 
+---
 
 ## Step 5: Prepare a database for repository
+
 > NOTE: if you only need Feature service, you may skip step 5,6 see [Feature only deployment](../../guides/feature-only-deployment.md).
 
 A MongoDB replica set, or a JDBC-compatible database (SQL Server, PostgreSQL) is used to persistent repository content. See the [JDBC-based repository guide](../../guides/JDBC-repository.md) for details on using a JDBC database.
 
 For a production deployment, a multi-node MongoDB replica set is recommended. Here is the link to [Install MongoDB](https://www.mongodb.com/docs/manual/installation/).
-\
+
 If you have a MongoDB replica set that can be accessed from inside the Kubernetes cluster, then collect the connection uri for further service config.
 
 If you don't have a MongoDB replica set currently, for your convenience, you can deploy a single node MongoDB replica set for testing as below. Keep in mind that the content will be lost after restart. Otherwise, go to the next step.
@@ -414,23 +449,29 @@ If you don't have a MongoDB replica set currently, for your convenience, you can
 ### Install a MongoDB instance by helm for testing
 
 Install MongoDB from helm chart
-```
+
+```shell
 helm install mongo ~/Spatial-SDK/charts/mongo-standalone -n mongo --create-namespace
 ```
 
-```
+```shell
 kubectl get pod -n mongo
 ```
+
 Wait until the mongo pod is ready
-```
+
+```shell
 NAME                                      READY   STATUS    RESTARTS   AGE
 mongo-XXXXXXXXXX-XXXX                     1/1     Running   0          8m35s
 ```
 This will install a single node replica set instance without authentication
 
-```
+```shell
 connection uri = mongodb://mongo-svc.mongo.svc.cluster.local/spatial-repository?authSource=admin&ssl=false
 ```
+
+---
+
 ## Step 6: Installation of Precisely Spatial SDK Helm Chart
 
 > NOTE: For every helm chart version update, make sure you run the [Step 3](#step-3-download-Spatial-SDK-docker-images) for uploading the docker images with the newest tag.
@@ -438,11 +479,11 @@ connection uri = mongodb://mongo-svc.mongo.svc.cluster.local/spatial-repository?
 There are two deployment files to choose from that require different amount of resources (CPU and Memory). Use `deploy/gitlab-deployment-small-values.yaml` for trying out the APIs. A production deployment should use `Spatial-SDK/deploy/gitlab-deployment-values.yaml`.
 
 Create a secret for pulling image from ACR:
-\
+
 Following command gets a token for current user to authenticate against ACR, if you want to use a service principal credentials, refer to [Use Service principal](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-auth-kubernetes).
 ```shell
 kubectl create secret docker-registry regcred \
-    --namespace spatial-analytics \
+    --namespace spatial-sdk \
     --docker-server=[acr_name].azurecr.io \
     --docker-username=00000000-0000-0000-0000-000000000000\
     --docker-password=$(az acr login --name [acr_name] --expose-token --output tsv --query accessToken)
@@ -452,14 +493,14 @@ To install/upgrade the Precisely Spatial SDK helm chart, use the following comma
 ```shell
 cd ~/Spatial-SDK/
 
-helm install spatial-analytics ~/Spatial-SDK/charts/precisely-spatial-sdk \
+helm install spatial-sdk ~/Spatial-SDK/charts/precisely-spatial-sdk \
  -f ~/Spatial-SDK/deploy/gitlab-deployment-values.yaml \
  --set "global.ingress.host=[ingress-host-name]" \
  --set "repository.mongodb.url=[mongodb-url]" \ 
  --set "global.registry.url=[acr].azurecr.io" \
  --set "global.registry.tag=latest" \ 
  --set "global.registry.secrets=regcred" \  
- --namespace spatial-analytics   
+ --namespace spatial-sdk   
 ```
 
 > Note: For a production environment, you should create a DNS record for ingress loadbalancer IP and use a domain name for `global.ingress.host`. 
@@ -468,12 +509,16 @@ helm install spatial-analytics ~/Spatial-SDK/charts/precisely-spatial-sdk \
 This should install Precisely Spatial SDK and set up a sample dataset that can be used to play around with the product.
 
 > Also, for more information, refer to the comments in [values.yaml](../../../charts/Spatial-SDK/values.yaml)
+
 #### Mandatory Parameters
-* ``global.ingress.host``: The Host name of Ingress e.g. http://aab329b2d767544.us-east-1.elb.amazonaws.com
-* ``repository.mongodb.url``: The Mongo DB connection URI e.g. mongodb+srv://<username>:<password>@mongo-svc.mongo.svc.cluster.local/spatial-repository?authSource=admin&ssl=false
-* ``global.registry.url``: The ACR repository for Precisely Spatial SDK docker image e.g. spatialregistry.azurecr.io
-* ``global.registry.tag``: The docker image tag value e.g. 1.3.3 or latest.
-* ``global.registry.secrets``: The name of the secret holding Azure Container Registry (ACR)  credential information.
+
+| Parameter | Description |
+| --- | --- |
+| ``global.ingress.host`` | The Host name of Ingress e.g. http://aab329b2d767544.us-east-1.elb.amazonaws.com |
+| ``repository.mongodb.url`` | The Mongo DB connection URI e.g. mongodb+srv://<username>:<password>@mongo-svc.mongo.svc.cluster.local/spatial-repository?authSource=admin&ssl=false |
+| ``global.registry.url`` | The ACR repository for Precisely Spatial SDK docker image e.g. spatialregistry.azurecr.io |
+| ``global.registry.tag`` | The docker image tag value e.g. 1.3.3 or latest. |
+| ``global.registry.secrets`` | The name of the secret holding Azure Container Registry (ACR)  credential information. |
 
 For more information on helm values, follow [this link](../../../charts/Spatial-SDK/README.md#helm-values).
 
@@ -481,7 +526,7 @@ For more information on helm values, follow [this link](../../../charts/Spatial-
 
 Once you run Precisely Spatial SDK helm install/upgrade command, it might take few minutes to get ready for the first time. You can run the following command to check the creation of pods. Please wait until all the pods are in running state:
 ```shell
-kubectl get pods -w --namespace spatial-analytics 
+kubectl get pods -w --namespace spatial-sdk 
 ```
 
 When all the pods are up, you can run the following command to check the ingress service host:
@@ -490,18 +535,23 @@ kubectl get services -o wide  nginx-ingress-ingress-nginx-controller
 ```
 
 
-After all the pods in namespace 'spatial-analytics' are in 'ready' status, launch SpatialServerManager in a browser with the URL below (You may need to accept the default self-signed certificate from Ingress. Check out the ingress document on how to change the certificate if you need). By default, the security is off, so you can login with any username/password. You should be able to browser named resources and pre-view maps. The link to Spatial Manager: `https://<your external ip>/SpatialServerManager`
+After all the pods in namespace 'spatial-sdk' are in 'ready' status, launch Spatial Platform in a browser with the URL below (You may need to accept the default self-signed certificate from Ingress. Check out the ingress document on how to change the certificate if you need). By default, the security is off, so you can login with any username/password. You should be able to browser named resources and pre-view maps. The link to Spatial Platform: `https://<your external ip>/spatial`
 
 
 You can check HPA status while services are running
-```
+
+```shell
 kubectl get hpa mapping-service
 ```
 
 If you are using the OGC services please refer to the on-premise docs ([WFS](https://docs.precisely.com/docs/sftw/spectrum/24.1/en/webhelp/Spatial/Spatial/source/Resources/resources/repoman/wfs_settings.html), [WMS](https://docs.precisely.com/docs/sftw/spectrum/24.1/en/webhelp/Spatial/Spatial/source/Resources/resources/repoman/wms_settings.html), [WMTS](https://docs.precisely.com/docs/sftw/spectrum/24.1/en/webhelp/Spatial/Spatial/source/Resources/resources/repoman/wmts_settings.html)) to configure the Online resource / Service URL with the public access url (Ingress EXTERNAL-IP).
 
+---
+
 ## Step 7: Enabling security - AuthN/AuthZ (Optional)
+
 A `Keycloak` (>=24.0.3) is used for authentication and authorization.
+
 - Authenticate a user
 - Issue JWT token for an authenticated user
 - Verify the JWT token used in a service request
@@ -513,7 +563,6 @@ General service flow,
 
 <img src="../../../images/security-flow.png"  width="686" height="783">
 
-
 Keycloak should have KC_HTTP_RELATIVE_PATH and KC_HOSTNAME_PATH set to ‘/auth’. Precisely Spatial SDK is compatible with Keycloak version >=24.0.3 ~ 24.0.4. For a production deployment, a multi-node Keycloak cluster is recommended. Here is a link to [Keycloak Install](https://www.keycloak.org/operator/installation), [Keycloak User Guides](https://www.keycloak.org/guides)
 
 If you have a Keycloak instance that can be accessed from inside the Kubernetes cluster, then collect the issuer url for further service config.
@@ -524,12 +573,14 @@ If you don't have a Keycloak instance available currently, for your convenience,
 ### Deploy Keycloak by helm chart for testing
 
 Identify the external loadbalancer host to expose the Keycloak Management Console UI
-```
+
+```shell
 kubectl get svc -n ingress-nginx
 ```
+
 looking for the EXTERNAL-IP in the output for the value of `hostname` used in the next command.
 
-```
+```shell
 helm install keycloak ~/Spatial-SDK/charts/keycloak-standalone -n keycloak --create-namespace \
   --set hostname=<ingress_host_name> \
   --set adminUser=<your-admin-username> \
@@ -566,11 +617,14 @@ In your newly created realm, update and copy both client secrets:
 2. Go to **Clients** > **spatial-data-load** > **Credentials**, then **Regenerate** and copy the Client Secret. Use this value for `upload.client-secret` in the next section.
 
 ### Update service config to use your realm in the keycloak
+
+```shell
+kubectl edit cm spatial-config -n spatial-sdk
 ```
-kubectl edit cm spatial-config -n spatial-analytics
-```
+
 Update the following properties with the values below,
-```
+
+```yaml
 ...
 oauth2.enabled: "true"
 oauth2.issuer-uri: "http://<ingress external ip>/auth/realms/<your realm name>"
@@ -580,15 +634,19 @@ upload.client-secret: "<get client secret from Keycloak>"
 spring.security.oauth2.resourceserver.jwt.issuer-uri: "<http://<ingress external ip>/auth/realms/<your realm name>"
 ...
 ```
+
 > NOTE: the property `oauth2.required-authority` restricts service access to the users who have at least the ’user’ client role by default. It can be configured to any spatial client roles. A value "" will disable the restriction.
 
 Restart all services to pick up the configuration changes
+
+```shell
+kubectl rollout restart deployment -n spatial-sdk
 ```
-kubectl rollout restart deployment -n spatial-analytics
-```
+
 Wait for all pods are ready
-```
-kubectl get pod -n spatial-analytics --watch
+
+```shell
+kubectl get pod -n spatial-sdk --watch
 ```
 
 Login to Precisely Spatial when all services are ready with the password configured for `admin` in Keycloak.
@@ -600,6 +658,7 @@ Verify if you can preview a map in Precisely Spatial.
 Please follow the user guide for how to apply permissions and other security related topics.
 
 ### IDP Federation
+
 Keycloak Federation allows you to authenticate users from your own IDP (such as LDAP) and map user roles to spatial client roles for authorization. Referring to Keycloak documents for the details.
 
 also see [IDP integration](../../guides/IDP-integration.md)
@@ -613,7 +672,10 @@ There are various utilities for:
 
 More details on Spatial Utilities can be found [here](../../guides/spatial-utilities.md). -->
 
+---
+
 ## Next Sections
+
 - [Precisely Spatial SDK Usage](../../../charts/Spatial-SDK/README.md)
 - [Metrics](../../Metrics.md#generating-insights-from-metrics)
 - [FAQs](../../faq/FAQs.md)
