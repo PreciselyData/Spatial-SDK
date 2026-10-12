@@ -1,11 +1,18 @@
 # Installing Precisely Spatial SDK Helm Chart on Google Cloud GKE
 
-### Before starting
-Make sure you have a Google Cloud account with following permissions:  
+---
+
+## Before starting
+
+Make sure you have a Google Cloud account with following permissions:
+
 - A project that IAM has roles of Kubernetes Engine Admin (roles/container.admin or roles/owner) and Artifact Registry Writer (roles/artifactregistry.writer)
 - Cloud Shell
-  
+
+---
+
 ## Step 1: Setup Cloud Shell
+
 Login to Google Cloud Console
 
 Ensure you are in the right project
@@ -14,20 +21,25 @@ Open Cloud Shell by clicking on the icon on the tool bar
 
 Verify the following utilities,
 
-```
+```shell
 gcloud -h
 ```
-```
+
+```shell
 kubectl -h
 ```
-```
+
+```shell
 helm -h
 ```
 
 ### Clone Precisely Spatial SDK helm charts & resources
-```
+
+```shell
 git clone https://github.com/PreciselyData/Spatial-SDK.git
 ```
+
+---
 
 ## Step 2: Create K8s Cluster (GKE)
 
@@ -38,70 +50,94 @@ Also see Google Cloud Document https://cloud.google.com/kubernetes-engine?hl=en
 ### Create GKE cluster
 
 Set up the project and region to use, e.g. my-project, us-east1
-```
+
+```shell
 gcloud config set compute/region us-east1
 ```
+
 The project should be set automatically, but you can update it if needed,
-```
+
+```shell
 gcloud config set project <my-project>
 ```
+
 Check the settings,
-```
+
+```shell
 gcloud config list
 ```
 
 Create GKE cluster (autopilot) named spatial-cloud-native. You can specify different project and region with `--project` and `--region`.
-```
+
+```shell
 gcloud container clusters create-auto spatial-cloud-native --region us-east1 --cluster-version 1.36.0
 ```
+
 It may take few minutes to create the cluster. Wait until the command finished.
-```
+
+```shell
 kubectl get nodes
 ```
+
 You may see no resources at beginning as no pods deployed yet.
-```
+
+```shell
 No resources found
 ```
+
 > NOTE: if the cluster version was not found, using the following command to list all valid cluster versions. Looking for one under REGULAR channel.
-```
+
+```shell
 gcloud container get-server-config
 ```
 
 ### Install Ingress Controller (ingress-nginx)
+
 First, add cluster admin permission:
-```
+
+```shell
 kubectl create clusterrolebinding cluster-admin-binding \
   --clusterrole cluster-admin \
   --user $(gcloud config get-value account)
 ```
+
 Then, install ingress controller:
-```
+
+```shell
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.10.0/deploy/static/provider/cloud/deploy.yaml
 ```
+
 Find the external IP
-```
+
+```shell
 kubectl get svc -n ingress-nginx
 ```
+
 Looking for the EXTERNAL-IP from output. Wait a moment and try again if the EXTERNAL-IP is not assigned.
-```
+
+```shell
 NAME                                 TYPE           CLUSTER-IP       EXTERNAL-IP     PORT(S)                      AGE
 ingress-nginx-controller             LoadBalancer   34.118.225.23    34.23.192.143   80:31548/TCP,443:32362/TCP   21m
 ingress-nginx-controller-admission   ClusterIP      34.118.232.254   <none>          443/TCP                      21m                                                                        443/TCP                      4h42m
 ```
+
 The public access url would be like below. Try the url from your browser, you should see a 404 page from 'nginx'.
-```
+
+```shell
 https://34.23.192.143
 ```
+
+---
 
 ## Step 3: Download Precisely Spatial SDK Docker Images
 
 The docker files can be downloaded from provided sources.
 
-
 ### Create Artifact registry
 
 Run the command with your region,
-```
+
+```shell
 gcloud artifacts repositories create spatial-repo \
     --repository-format=docker \
     --location=<your region> \
@@ -109,7 +145,8 @@ gcloud artifacts repositories create spatial-repo \
 ```
 
 Find out 'Registry URL',
-```
+
+```shell
 gcloud artifacts repositories describe spatial-repo --location=<your region>
 ```
 
@@ -118,58 +155,71 @@ gcloud artifacts repositories describe spatial-repo --location=<your region>
 Due to the disk space limitation on cloudshell, you need to unzip the image file you downloaded on your local machine and upload the nine tar files to cloudshell. In cloudshell, click on the Upload menu to upload the image tar files.
 
 Run the shell scripts to load images to artifact registry,
-```
+
+```shell
 chmod a+x ~/Spatial-SDK/scripts/gke/push-images.sh
 ```
-```
+
+```shell
 ~/Spatial-SDK/scripts/gke/push-images.sh <your registry url> <spatial_analytics_docker_images_dir>
 ```
 
 you can also load images one by one if there's no enough disk space available (restart the cloudshell may release more disk space).
-```
+
+```shell
 ~/Spatial-SDK/scripts/gke/push-images.sh <your registry url> <tar file name without ext> <spatial_analytics_docker_images_dir>
 ```
 
 List images in the artifact registry
-```
+
+```shell
 gcloud artifacts docker images list <your registry url>
 ```
 
 Once you finished the testing, if you do not want this artifact registry anymore, you can delete it for cost saving,
-```
+
+```shell
 gcloud artifacts repositories delete spatial-repo --location=<your region>
 ```
+
+---
 
 ## Step 4: Create a Persistent Volume and Persistent Volume Claim
 
 A PV (Persistent Volume) is required to share files across all services (pods), including
+
 - File based Spatial data sets, such as Mapinfo TAB, Shape, GeoPackage and Geodatabase etc.
 - Tile cache
 - Map image cache
 - Custom Symbols
 - Extended DataProviders
 - JDBC drivers
-	
+
 ### Create a PVC/PV
 
 We will use `standard-rwx` auto provisioner to provision a PV through a PVC. There are other provisioners that may give better overall performance.
 
 Create a PVC that dynamically provisioning a PV using standard-rwx storage class,
-```
+
+```shell
 kubectl apply -f ~/Spatial-SDK/deploy/gke/pvc.yaml
 ```
+
 Check results, the pvc status will become `Bound` after service pods are deployed.
-```
+
+```shell
 kubectl get pvc
 ```
 
+---
+
 ## Step 5: Prepare a database for repository
+
 > NOTE: if you only need Feature service, you may skip step 5,6 see [Feature only deployment](../../guides/feature-only-deployment.md).
 
 A MongoDB replica set, or a JDBC-compatible database (SQL Server, PostgreSQL) is used to persistent repository content. See the [JDBC-based repository guide](../../guides/JDBC-repository.md) for details on using a JDBC database.
 
 For a production deployment, a multi-node MongoDB replica set is recommended. Here is the link to [Install MongoDB](https://www.mongodb.com/docs/manual/installation/).
-
 
 If you have a MongoDB replica set that can be accessed from inside the Kubernetes cluster, then collect the connection uri for further service config.
 
@@ -178,21 +228,29 @@ If you don't have a MongoDB replica set currently, for your convenience, you can
 ### Install a MongoDB instance by helm for testing
 
 Install MongoDB from helm chart
-```
+
+```shell
 helm install mongo ~/Spatial-SDK/charts/mongo-standalone -n mongo --create-namespace
 ```
-```
+
+```shell
 kubectl get pod -n mongo
 ```
+
 Wait until the mongo pod is ready
-```
+
+```shell
 NAME                                      READY   STATUS    RESTARTS   AGE
 mongo-XXXXXXXXXX-XXXX                     1/1     Running   0          8m35s
 ```
+
 This will install a single node replica set instance without authentication
-```
+
+```shell
 connection uri = mongodb://mongo-svc.mongo.svc.cluster.local/spatial-repository?authSource=admin&ssl=false
 ```
+
+---
 
 ## Step 6: Installation of Precisely Spatial SDK Helm Chart
 
@@ -204,19 +262,22 @@ There are two deployment files to choose from that require different amount of r
 
 > NOTE: if you are not using MongoDB deployed from this guide, you need to update the mongo uri in the values file before install.
 
-```
+```shell
 helm install spatial-sdk ~/Spatial-SDK/charts/precisely-spatial-sdk \
      -f ~/Spatial-SDK/deploy/gitlab-deployment-small-values.yaml \
      --set global.registry.secrets=null \
      --set global.registry.url=<your registry url>
 ```
+
 Wait until all services are ready. It may take 5 to 8 minutes to get ready for the first time. 
-```
+
+```shell
 kubectl get pod -n spatial-sdk
 ```
 
 You can also deploy services with hpa enabled, here is an example (check [gitlab-deployment-values.yaml](../../../deploy/gitlab-deployment-values.yaml) for more details),
-```
+
+```shell
 helm install spatial-sdk ~/Spatial-SDK/charts/precisely-spatial-sdk \
      -f ~/Spatial-SDK/deploy/gitlab-deployment-values.yaml \
      --set global.registry.secrets=null \
@@ -231,15 +292,20 @@ After all the pods are in 'ready' status, launch Precisely Spatial in a browser 
 `https://<your external ip>/spatial`
    
 You can check HPA status while services are running
-```
+
+```shell
 kubectl get hpa mapping-service
 ```
+
 <!-- 
 If you are using the OGC services please refer to the on-premise docs ([WFS](https://docs.precisely.com/docs/sftw/spectrum/24.1/en/webhelp/Spatial/Spatial/source/Resources/resources/repoman/wfs_settings.html), [WMS](https://docs.precisely.com/docs/sftw/spectrum/24.1/en/webhelp/Spatial/Spatial/source/Resources/resources/repoman/wms_settings.html), [WMTS](https://docs.precisely.com/docs/sftw/spectrum/24.1/en/webhelp/Spatial/Spatial/source/Resources/resources/repoman/wmts_settings.html)) to configure the Online resource / Service URL with the public access url (Ingress EXTERNAL-IP). -->
 
+---
 
 ## Step 7: Enabling security - AuthN/AuthZ (Optional)
+
 A `Keycloak` (>=24.0.3) is used for authentication and authorization. 
+
 - Authenticate a user
 - Issue JWT token for an authenticated user
 - Verify the JWT token used in a service request
@@ -251,7 +317,6 @@ General service flow,
 
 <img src="../../../images/security-flow.png"  width="686" height="783">
 
-
 Keycloak should have KC_HTTP_RELATIVE_PATH and KC_HOSTNAME_PATH set to ‘/auth’. SCN is compatible with Keycloak version >=24.0.3 ~ 24.0.4. For a production deployment, a multi-node Keycloak cluster is recommended. Here is a link to [Keycloak Install](https://www.keycloak.org/operator/installation), [Keycloak User Guides](https://www.keycloak.org/guides)
 
 If you have a Keycloak instance that can be accessed from inside the Kubernetes cluster, then collect the issuer url for further service config. 
@@ -262,17 +327,20 @@ If you don't have a Keycloak instance available currently, for your convenience,
 ### Deploy Keycloak by helm chart for testing
 
 Identify the external loadbalancer host to expose the Keycloak Management Console UI
-```
+
+```shell
 kubectl get svc -n ingress-nginx
 ```
+
 looking for the EXTERNAL-IP in the output for the value of `hostname` used in the next command.
 
-```
+```shell
 helm install keycloak ~/Spatial-SDK/charts/keycloak-standalone -n keycloak --create-namespace \
   --set hostname=<ingress external ip> \
   --set adminUser=<your-admin-username> \
   --set adminPassword=<your-secure-password>
 ```
+
 Wait until `keycloak` pod is up and ready (`kubectl get pod -n keycloak`). It may take some time for Ingress to be deployed.
     
 Open a browser and login to keycloak console with your admin credentials at
@@ -300,11 +368,14 @@ In your newly created realm, update and copy both client secrets:
 2. Go to **Clients** > **spatial-data-load** > **Credentials**, then **Regenerate** and copy the Client Secret. Use this value for `upload.client-secret` in the next section.
 
 ### Update service config to use your realm in the keycloak
-```
+
+```shell
 kubectl edit cm spatial-config
 ```
+
 Update the following properties with the values below,
-```
+
+```yaml
 ...
 oauth2.enabled: "true"
 oauth2.issuer-uri: "http://<ingress external ip>/auth/realms/<your realm name>"
@@ -314,14 +385,18 @@ upload.client-secret: "<get client secret from Keycloak>"
 spring.security.oauth2.resourceserver.jwt.issuer-uri: "<ingress external ip>/auth/realms/<your realm name>"
 ...
 ```
+
 > NOTE: the property `oauth2.required-authority` restricts service access to the users who have at least the ’user’ client role by default. It can be configured to any spatial client roles. A value "" will disable the restriction.
 
 Restart all services to pick up the configuration changes
-```
+
+```shell
 kubectl rollout restart deployment
 ```
+
 Wait for all pods are ready
-```
+
+```shell
 kubectl get pod
 ```
 
@@ -334,6 +409,7 @@ Verify if you can preview a map in Precisely Spatial.
 Please follow the user guide for how to apply permissions and other security related topics.
 
 ### IDP Federation
+
 Keycloak Federation allows you to authenticate users from your own IDP (such as LDAP) and map user roles to spatial client roles for authorization. Referring to Keycloak documents for the details.
 
 also see [IDP integration](../../guides/IDP-integration.md)
@@ -347,7 +423,10 @@ There are various utilities for:
 
 More details on Spatial Utilities can be found [here](../../guides/spatial-utilities.md). -->
 
+---
+
 ## Next Sections
+
 - [Precisely Spatial SDK Usage](../../../charts/Spatial-SDK/README.md)
 - [Metrics](../../Metrics.md#generating-insights-from-metrics)
 - [FAQs](../../faq/FAQs.md)

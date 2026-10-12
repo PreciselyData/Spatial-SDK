@@ -1,13 +1,20 @@
 # Installing Precisely Spatial SDK Helm Chart on AWS EKS
 
-### Before starting
-Make sure you have an AWS account with following permissions:  
-  - create IAM roles  
-  - create IAM policies  
-  - create EKS clusters (EC2 based)  
-  - create EFS filesystem  
-  
+---
+
+## Before starting
+
+Make sure you have an AWS account with following permissions:
+
+- create IAM roles
+- create IAM policies
+- create EKS clusters (EC2 based)
+- create EFS filesystem
+
+---
+
 ## Step 1: Prepare your environment
+
 To deploy Precisely Spatial SDK application in AWS EKS, install the following client tools:
 
 - [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
@@ -18,11 +25,13 @@ To deploy Precisely Spatial SDK application in AWS EKS, install the following cl
 - [aws-cli](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html)
 - [eksctl](https://docs.aws.amazon.com/eks/latest/userguide/getting-started-eksctl.html)
 
-
 ### Clone Precisely Spatial SDK helm charts & resources
-```
+
+```shell
 git clone https://github.com/PreciselyData/Spatial-SDK.git
 ```
+
+---
 
 ## Step 2: Create K8s Cluster (EKS)
 
@@ -79,10 +88,11 @@ You can create the EKS cluster or use an existing EKS cluster.
 
 EKS cluster must have the above addons and ingress for the ease of installation of Precisely Spatial SDK Helm Chart.
 
-
 > Note: You should run this command in your shell to connect to EKS cluster:  
 > `` aws eks --region [aws-region] update-kubeconfig --name [cluster-name] ``  
 > This will update your local copy of EKS cluster configuration. 
+
+---
 
 ## Step 3: Download Precisely Spatial SDK Docker Images
 
@@ -145,8 +155,12 @@ There are nine docker images which will be pushed to ECR with the tag of helm ch
 
 <!-- For more details related to docker images download script, follow the instructions [here](../../../scripts/images-to-ecr-uploader/README.md) -->
 
+---
+
 ## Step 4: Create a Persistent Volume
+
 A PV (Persistent Volume) is required to share files across all services (pods), including
+
 - File based Spatial data sets, such as Mapinfo TAB, Shape, GeoPackage and Geodatabase etc.
 - Tile cache
 - Map image cache
@@ -180,32 +194,49 @@ to create EFS and link it to EKS cluster, or directly link existing EFS to the E
   ```
 Make a note of `FileSystemId` displayed on you screen.  
 
-#### Create a StorageClass for EFS Driver  
-Update template [efs-sc.yaml](../../../deploy/eks/efs-sc.yaml) with the file system id of your EFS file system & run:  
+#### Create a StorageClass for EFS Driver
 
-```kubectl apply -f ./deploy/eks/efs-sc.yaml ```  
+Update template [efs-sc.yaml](../../../deploy/eks/efs-sc.yaml) with the file system id of your EFS file system & run:
 
-You can check the result by executing:    
-```kubectl get sc```  
+```shell
+kubectl apply -f ./deploy/eks/efs-sc.yaml 
+```
 
-#### Create a PVC  
-We will deploy Precisely Spatial SDK into a new namespace 'spatial-sdk', so create a namespace first,  
-```kubectl create ns spatial-sdk```
+You can check the result by executing:
 
-Create a PVC in the namespace that dynamically provisioning a PV using efs-sc storage class,  
+```shell
+kubectl get sc
+```
 
-```kubectl apply -f ./deploy/eks/efs-pvc.yaml -n spatial-sdk```  
+#### Create a PVC
 
-Check results, wait until the pvc status becomes Bound.  
-```kubectl get pvc -n spatial-sdk```
+We will deploy Precisely Spatial SDK into a new namespace 'spatial-sdk', so create a namespace first,
+
+```shell
+kubectl create ns spatial-sdk
+```
+
+Create a PVC in the namespace that dynamically provisioning a PV using efs-sc storage class,
+
+```shell
+kubectl apply -f ./deploy/eks/efs-pvc.yaml -n spatial-sdk
+```
+
+Check results, wait until the pvc status becomes Bound.
+
+```shell
+kubectl get pvc -n spatial-sdk
+```
+
+---
 
 ## Step 5: Prepare a database for repository
+
 > NOTE: if you only need Feature service, you may skip step 5,6 see [Feature only deployment](../../guides/feature-only-deployment.md).
 
 A MongoDB replica set, or a JDBC-compatible database (SQL Server, PostgreSQL) is used to persistent repository content. See the [JDBC-based repository guide](../../guides/JDBC-repository.md) for details on using a JDBC database.
 
 For a production deployment, a multi-node MongoDB replica set is recommended. Here is the link to [Install MongoDB](https://www.mongodb.com/docs/manual/installation/).
-
 
 If you have a MongoDB replica set that can be accessed from inside the Kubernetes cluster, then collect the connection uri for further service config.
 
@@ -214,21 +245,30 @@ If you don't have a MongoDB replica set currently, for your convenience, you can
 ### Install a MongoDB instance by helm for testing
 
 Install MongoDB from helm chart
-```
+
+```shell
 helm install mongo ./charts/mongo-standalone -n mongo --create-namespace
 ```
-```
+
+```shell
 kubectl get pod -n mongo
 ```
+
 Wait until the mongo pod is ready
-```
+
+```shell
 NAME                                      READY   STATUS    RESTARTS   AGE
 mongo-XXXXXXXXXX-XXXX                     1/1     Running   0          8m35s
 ```
+
 This will install a single node replica set instance without authentication
-```
+
+```shell
 connection uri = mongodb://mongo-svc.mongo.svc.cluster.local/spatial-repository?authSource=admin&ssl=false
 ```
+
+---
+
 ## Step 6: Installation of Precisely Spatial SDK Helm Chart
 
 > NOTE: For every helm chart version update, make sure you run the [Step 3](#step-3-download-Spatial-SDK-docker-images) for uploading the docker images with the newest tag.
@@ -255,12 +295,16 @@ helm install spatial-sdk ~/Spatial-SDK/charts/precisely-spatial-sdk \
 This should install Precisely Spatial SDK and set up a sample dataset that can be used to play around with the product.
 
 > Also, for more information, refer to the comments in [values.yaml](../../../charts/Spatial-SDK/values.yaml)
+
 #### Mandatory Parameters
-* ``global.ingress.host``: The Host name of Ingress e.g. http://aab329b2d767544.us-east-1.elb.amazonaws.com
-* ``repository.mongodb.url``: The Mongo DB connection URI e.g. mongodb+srv://<username>:<password>@mongo-svc.mongo.svc.cluster.local/spatial-repository?authSource=admin&ssl=false 
-* ``global.registry.url``: The ECR repository for Precisely Spatial SDK docker image e.g. account_id.dkr.ecr.us-east-1.amazonaws.com
-* ``global.registry.tag``: The docker image tag value e.g. 2.0.0 or latest.
-* ``global.registry.secrets``: The name of the secret holding ECR credential information.
+
+| Parameter | Description |
+| --- | --- |
+| ``global.ingress.host`` | The Host name of Ingress e.g. http://aab329b2d767544.us-east-1.elb.amazonaws.com |
+| ``repository.mongodb.url`` | The Mongo DB connection URI e.g. mongodb+srv://<username>:<password>@mongo-svc.mongo.svc.cluster.local/spatial-repository?authSource=admin&ssl=false |
+| ``global.registry.url`` | The ECR repository for Precisely Spatial SDK docker image e.g. account_id.dkr.ecr.us-east-1.amazonaws.com |
+| ``global.registry.tag`` | The docker image tag value e.g. 2.0.0 or latest. |
+| ``global.registry.secrets`` | The name of the secret holding ECR credential information. |
 
 For more information on helm values, follow [this link](../../../charts/Spatial-SDK/README.md).  
 
@@ -281,14 +325,19 @@ After all the pods in namespace 'spatial-sdk' are in 'ready' status, launch Spat
 
 
 You can check HPA status while services are running
-```
+
+```shell
 kubectl get hpa mapping-service
 ```
 
 <!-- If you are using the OGC services please refer to the on-premise docs ([WFS](https://docs.precisely.com/docs/sftw/spectrum/24.1/en/webhelp/Spatial/Spatial/source/Resources/resources/repoman/wfs_settings.html), [WMS](https://docs.precisely.com/docs/sftw/spectrum/24.1/en/webhelp/Spatial/Spatial/source/Resources/resources/repoman/wms_settings.html), [WMTS](https://docs.precisely.com/docs/sftw/spectrum/24.1/en/webhelp/Spatial/Spatial/source/Resources/resources/repoman/wmts_settings.html)) to configure the Online resource / Service URL with the public access url (Ingress EXTERNAL-IP). -->
 
+---
+
 ## Step 7: Enabling security - AuthN/AuthZ (Optional)
+
 A `Keycloak` (>=24.0.3) is used for authentication and authorization.
+
 - Authenticate a user
 - Issue JWT token for an authenticated user
 - Verify the JWT token used in a service request
@@ -300,28 +349,29 @@ General service flow,
 
 <img src="../../../images/security-flow.png"  width="686" height="783">
 
-
 Keycloak should have KC_HTTP_RELATIVE_PATH and KC_HOSTNAME_PATH set to ‘/auth’. Precisely Spatial SDK is compatible with Keycloak version >=24.0.3 ~ 24.0.4. For a production deployment, a multi-node Keycloak cluster is recommended. Here is a link to [Keycloak Install](https://www.keycloak.org/operator/installation), [Keycloak User Guides](https://www.keycloak.org/guides)
 
 If you have a Keycloak instance that can be accessed from inside the Kubernetes cluster, then collect the issuer url for further service config.
 
 If you don't have a Keycloak instance available currently, for your convenience, you can deploy a Keycloak for testing by following the first step below, otherwise, you can skip the step.
 
-
 ### Deploy Keycloak by helm chart for testing
 
 Identify the external loadbalancer host to expose the Keycloak Management Console UI
-```
+
+```shell
 kubectl get svc
 ```
+
 looking for the EXTERNAL-IP in the output for the value of `hostname` used in the next command.
 
-```
+```shell
 helm install keycloak ~/Spatial-SDK/charts/keycloak-standalone -n keycloak --create-namespace \
   --set hostname=<ingress external ip> \
   --set adminUser=<your-admin-username> \
   --set adminPassword=<your-secure-password>
 ```
+
 Wait until `keycloak` pod is up and ready (`kubectl get pod -n keycloak`). It may take some time for Ingress to be deployed.
 
 Open a browser and login to keycloak console with your admin credentials at
@@ -349,11 +399,14 @@ In your newly created realm, update and copy both client secrets:
 2. Go to **Clients** > **spatial-data-load** > **Credentials**, then **Regenerate** and copy the Client Secret. Use this value for `upload.client-secret` in the next section.
 
 ### Update service config to use your realm in the keycloak
-```
+
+```shell
 kubectl edit cm spatial-config -n spatial-sdk
 ```
+
 Update the following properties with the values below,
-```
+
+```yaml
 ...
 oauth2.enabled: "true"
 oauth2.issuer-uri: "http://<ingress external ip>/auth/realms/<your realm name>"
@@ -363,14 +416,18 @@ upload.client-secret: "<get client secret from Keycloak>"
 spring.security.oauth2.resourceserver.jwt.issuer-uri: "http://<ingress external ip>/auth/realms/<your realm name>"
 ...
 ```
+
 > NOTE: the property `oauth2.required-authority` restricts service access to the users who have at least the ’user’ client role by default. It can be configured to any spatial client roles. A value "" will disable the restriction.
 
 Restart all services to pick up the configuration changes
-```
+
+```shell
 kubectl rollout restart deployment -n spatial-sdk 
 ```
+
 Wait for all pods are ready
-```
+
+```shell
 kubectl get pod -n spatial-sdk 
 ```
 
@@ -383,6 +440,7 @@ Verify if you can preview a map in Precisely Spatial.
 Please follow the user guide for how to apply permissions and other security related topics.
 
 ### IDP Federation
+
 Keycloak Federation allows you to authenticate users from your own IDP (such as LDAP) and map user roles to spatial client roles for authorization. Referring to Keycloak documents for the details.
 
 also see [IDP integration](../../guides/IDP-integration.md)
@@ -396,7 +454,10 @@ There are various utilities for:
 
 More details on Spatial Utilities can be found [here](../../guides/spatial-utilities.md). -->
 
+---
+
 ## Next Sections
+
 - [Precisely Spatial SDK Usage](../../../charts/Spatial-SDK/README.md)
 - [Metrics](../../Metrics.md#generating-insights-from-metrics)
 - [FAQs](../../faq/FAQs.md)
