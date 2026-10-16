@@ -7,12 +7,21 @@ metadata:
 spec:
   capacity:
     storage: 100Gi
-  volumeMode: Filesystem
   accessModes:
     - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
   storageClassName: ""
+  volumeMode: Filesystem
   mountOptions:
-    - hard
-  nfs:
-    server: spatialstorage001.file.core.windows.net 
-    path: /spatialstorage001/fileshares
+    - nconnect=4
+    - noresvport
+    - actimeo=30
+  csi:
+    driver: file.csi.azure.com
+    volumeHandle: "spatial-fileshares#spatialstorage001#fileshares"
+    volumeAttributes:
+      protocol: nfs
+      encryptInTransit: "true"
+      resourceGroup: spatial-fileshares
+      storageAccount: spatialstorage001
+      shareName: fileshares

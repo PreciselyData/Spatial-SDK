@@ -104,7 +104,7 @@ if [ ! -d "$images_dir" ]; then
   exit 1
 fi
 
-images_map="mapping-service:mapping-service feature-service:feature-service tiling-service:tiling-service resource-service:resource-service spatial-platform-frontend:spatial-platform-ux-frontend composite-service:composite-service data-service:data-service private-sdk-mcp:private-sdk-mcp samples-data:samples-data"
+images_map="mapping-service:mapping-service feature-service:feature-service tiling-service:tiling-service resource-service:resource-service spatial-platform-ux-frontend:spatial-platform-ux-frontend composite-service:composite-service data-service:data-service private-sdk-mcp:private-sdk-mcp samples-data:samples-data"
 selected_images="$images_map"
 
 if [ -n "$image_name" ]; then
