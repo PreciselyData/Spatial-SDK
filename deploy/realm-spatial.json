@@ -2,6 +2,7 @@
   "realm": "Spatial",
   "enabled": true,
   "accessTokenLifespan": 5400,
+  "ssoSessionIdleTimeout": 7200,
   "clients": [
     {
       "clientId": "spatial-data-load",

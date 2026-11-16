@@ -12,3 +12,5 @@ requestCPU: 100m
 requestMemory: 5Gi
 limitCPU: 500m
 limitMemory: 7Gi
+requestEphemeralStorage: 2Gi
+limitEphemeralStorage: 4Gi

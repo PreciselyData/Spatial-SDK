@@ -70,7 +70,7 @@ gcloud config list
 Create GKE cluster (autopilot) named spatial-cloud-native. You can specify different project and region with `--project` and `--region`.
 
 ```shell
-gcloud container clusters create-auto spatial-cloud-native --region us-east1 --cluster-version 1.36.0
+gcloud container clusters create-auto spatial-cloud-native --region us-east1 --cluster-version 1.36
 ```
 
 It may take few minutes to create the cluster. Wait until the command finished.
@@ -104,7 +104,7 @@ kubectl create clusterrolebinding cluster-admin-binding \
 Then, install ingress controller:
 
 ```shell
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.10.0/deploy/static/provider/cloud/deploy.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.15.1/deploy/static/provider/cloud/deploy.yaml         
 ```
 
 Find the external IP
@@ -223,14 +223,18 @@ For a production deployment, a multi-node MongoDB replica set is recommended. He
 
 If you have a MongoDB replica set that can be accessed from inside the Kubernetes cluster, then collect the connection uri for further service config.
 
-If you don't have a MongoDB replica set currently, for your convenience, you can deploy a single node MongoDB replica set for testing as below. Keep in mind that the content will be lost after restart. Otherwise, go to the next step.
+If you don't have a MongoDB replica set currently, for your convenience, you can deploy a single node MongoDB replica set for testing as below.
 
 ### Install a MongoDB instance by helm for testing
 
-Install MongoDB from helm chart
+Create a persistent volume and install MongoDB from helm chart
 
 ```shell
-helm install mongo ~/Spatial-SDK/charts/mongo-standalone -n mongo --create-namespace
+kubectl apply -f ~/Spatial-SDK/deploy/gke/pvc.yaml -n mongo
+```
+
+```shell
+helm install mongo ~/Spatial-SDK/charts/mongo-standalone -n mongo --create-namespace --set persistent.pvc=data-volume-claim
 ```
 
 ```shell
@@ -244,7 +248,7 @@ NAME                                      READY   STATUS    RESTARTS   AGE
 mongo-XXXXXXXXXX-XXXX                     1/1     Running   0          8m35s
 ```
 
-This will install a single node replica set instance without authentication
+This will install a single node replica set instance without authentication. Mongo data is stored in the persistent volume.
 
 ```shell
 connection uri = mongodb://mongo-svc.mongo.svc.cluster.local/spatial-repository?authSource=admin&ssl=false
@@ -265,7 +269,6 @@ There are two deployment files to choose from that require different amount of r
 ```shell
 helm install spatial-sdk ~/Spatial-SDK/charts/precisely-spatial-sdk \
      -f ~/Spatial-SDK/deploy/gitlab-deployment-small-values.yaml \
-     --set global.registry.secrets=null \
      --set global.registry.url=<your registry url>
 ```
 
@@ -280,7 +283,6 @@ You can also deploy services with hpa enabled, here is an example (check [gitlab
 ```shell
 helm install spatial-sdk ~/Spatial-SDK/charts/precisely-spatial-sdk \
      -f ~/Spatial-SDK/deploy/gitlab-deployment-values.yaml \
-     --set global.registry.secrets=null \
      --set global.registry.url=<your registry url> \
      --set mapping-service.hpaEnabled=true \
      --set mapping-service.maxReplicaCount=3
@@ -326,36 +328,38 @@ If you don't have a Keycloak instance available currently, for your convenience,
 
 ### Deploy Keycloak by helm chart for testing
 
-Identify the external loadbalancer host to expose the Keycloak Management Console UI
+```shell
+kubectl apply -f ~/Spatial-SDK/deploy/gke/pvc.yaml -n keycloak
+```
+
+```shell
+helm install keycloak ~/Spatial-SDK/charts/keycloak-standalone -n keycloak --create-namespace \
+  --set adminUser=admin \
+  --set adminPassword=admin \
+  --set persistent.pvc=data-volume-claim
+```
+
+Wait until `keycloak` pod is up and ready (`kubectl get pod -n keycloak`). It may take some time for Ingress to be deployed.
 
 ```shell
 kubectl get svc -n ingress-nginx
 ```
 
-looking for the EXTERNAL-IP in the output for the value of `hostname` used in the next command.
+looking for the EXTERNAL-IP in the output for accessing keycloak next.
 
-```shell
-helm install keycloak ~/Spatial-SDK/charts/keycloak-standalone -n keycloak --create-namespace \
-  --set hostname=<ingress external ip> \
-  --set adminUser=<your-admin-username> \
-  --set adminPassword=<your-secure-password>
-```
-
-Wait until `keycloak` pod is up and ready (`kubectl get pod -n keycloak`). It may take some time for Ingress to be deployed.
-    
 Open a browser and login to keycloak console with your admin credentials at
-`http://<ingress external ip>/auth`
+`https://<ingress external ip>/auth`
 
-> NOTE: this keycloak server is running in DEV mode, only use HTTP to login to admin-console.
+> NOTE: this keycloak server is running in DEV mode.
 
 ### Create a realm for spatial services
 
 Precisely Spatial SDK has a realm template (realm-spatial.json) that helps to setup the required realm configuration and spatial client settings. Precisely Spatial SDK authenticate with realm users and authorize with spatial client roles and resource permissions. All resource permissions (ACLs) are managed in spatial client through UMA API.
 
 Download `~/Spatial-SDK/deploy/realm-spatial.json` to your local system.
-In the administration console, click on realm pulldown menu and select `Create realm`
+In the administration console, click on Manage realms and click `Create realm`
 
-Click on `Browse...` button, select the realm file `realm-spatial.json`, give a name to the new realm (use all lowercase name, e.g. `development`) and click the `Create` (do not double clicks).
+Click on `Browse...` button, select the realm file `realm-spatial.json`, click the `Create` (do not double clicks). The realm name is case-sensitive. 
 
 After imported the realm from the template, use Keycloak Admin console to change admin credentials, default user credentials and client secrets.
 

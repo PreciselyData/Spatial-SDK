@@ -7,3 +7,5 @@
 adminUser: ""
 adminPassword: ""
 hostname:
+persistent:
+  pvc: ""

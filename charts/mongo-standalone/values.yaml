@@ -1,5 +1,5 @@
 image:
-  tag: 7.0
+  tag: 8.3.17
 credentials:
   # Set these values using --set flags or a secure values file during deployment
   # Example: helm install --set credentials.rootUsername=<user> --set credentials.rootPassword=<secure-password>
@@ -10,3 +10,5 @@ resources:
   requestMemory: 512Mi
   limitCPU: 2000m
   limitMemory: 2Gi
+persistent:
+  pvc: ""
