@@ -27,9 +27,11 @@ spec:
             requests:
               cpu: {{ .Values.requestCPU }}
               memory: {{ .Values.requestMemory  }}
+              ephemeral-storage: "2Gi"
             limits:
               cpu: {{ .Values.limitCPU }}
               memory: {{ .Values.limitMemory}}
+              ephemeral-storage: "2Gi"
       restartPolicy: Never
       imagePullSecrets:
         {{- if .Values.global }}
