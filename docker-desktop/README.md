@@ -1,110 +1,113 @@
-# Precisely Private Spatial APIs Setup on Local Docker Desktop
+# Local Docker Desktop
 
-The Private Spatial APIs can be setup locally for test purpose.
+Run the Precisely Spatial SDK services locally for development and testing.
 
-This deployment requires you to set environment variables for OAuth2 client secrets before starting the services.
+## Prerequisites
 
-## Step 0: Configure Environment Variables
-
-Before running docker-compose, you **must** set required environment variables:
-
-### Windows PowerShell:
-```powershell
-$env:OAUTH2_CLIENT_SECRET = "your-secure-client-secret"
-$env:IMAGE_REGISTRY = "localhost:5000"
-$env:TAG = "latest"
-$env:SPATIAL_PATH = "C:\path\to\spatial\data"
-```
-
-### Windows Command Prompt:
-```cmd
-set OAUTH2_CLIENT_SECRET=your-secure-client-secret
-set IMAGE_REGISTRY=localhost:5000
-set TAG=latest
-set SPATIAL_PATH=C:\path\to\spatial\data
-```
-
-### Linux/macOS:
-```bash
-export OAUTH2_CLIENT_SECRET="your-secure-client-secret"
-export IMAGE_REGISTRY="localhost:5000"
-export TAG="latest"
-export SPATIAL_PATH="/path/to/spatial/data"
-```
-
-### Using .env File (Recommended for Development)
-
-Edit `.env` file with your values:
-```properties
-IMAGE_REGISTRY=localhost:5000
-TAG=latest
-SPATIAL_PATH=/path/to/your/spatial/data
-OAUTH2_CLIENT_SECRET=your-secure-client-secret
-```
+- Docker Desktop with Docker Compose v2.
+- A container registry containing the Spatial SDK images. The default is a local registry at `localhost:5000`.
+- A host data folder accessible to Docker Desktop. The default is `C:/spatial`.
 
 ## Step 1: Download Reference Data and Required Docker Images
 
-The docker files can be downloaded from either Precisely's Data Portfolio or [Data Integrity Suite](https://cloud.precisely.com/). For information about Precisely's Data Portfolio,
-see the [Precisely Data Guide](https://dataguide.precisely.com/) where you can also sign up for a free account and
-access software, reference data and docker files available in [Precisely Data Experience](https://data.precisely.com/).
+Download the Spatial SDK image archives and any licensed reference data using your Precisely entitlements. See the [Precisely spatial SDK downloads](https://pdt.data.precisely.com/software/families/Precisely%20Data%20Integrity%20Suite/delivery-groups/spatial-sdk) for available downloads. Extract the image archives so the `.tar` files are together in one directory.
 
-After download, the docker images need to be pushed to a container registry. If you don't have a container registry, you can create one for testing as shown below:
-   ```
-   docker run -d -p 5000:5000 --restart=always --name registry registry:2.7
-   ```
-Then you can use a script [push-images](../scripts/aks/push-images.sh) to push the docker images to container registry.
-> Note: Unzip the downloaded docker images to a directory <spatial_analytics_docker_images_dir> so that it contains tar files.
+The default `IMAGE_REGISTRY` in `.env` is `localhost:5000`. Start a local registry with persistent storage, or use a registry you already have:
 
-Open a shell on you local system and execute the following steps.
-Run the shell script to push images to Azure Container Registry:
-```shell
-cd <spatial_analytics_docker_images_dir>
-chmod a+x ~/Private-Spatial-APIs/scripts/aks/push-images.sh
-~/Private-Spatial-APIs/scripts/aks/push-images.sh <container_registry_url>
-```
-You can also load images one by one if there's no enough disk space available.
-There are six docker images which will be pushed to container registry:
-1. feature-service
-2. mapping-service
-3. tiling-service
-4. namedresource-service
-5. spatialmanager-service
-6. samples-data
-
-Upload images one by one:
-```shell
-~/Private-Spatial-APIs/scripts/aks/push-images.sh <container_registry_url>  <tar file name without ext>
+```powershell
+docker run -d --name spatial-sdk-registry --restart=always -p 5000:5000 -v spatial-sdk-registry-data:/var/lib/registry registry:2.7
 ```
 
+The image-push scripts are Bash scripts. From the repository root, run one from Git Bash, WSL, or another Bash environment with Docker access. Use the same tag as `IMAGE_TAG` in `docker-desktop/.env`:
 
-## Step 2: Running Service Locally
+```bash
+bash scripts/aks/push-images.sh --tag latest localhost:5000 /path/to/extracted-images
+```
 
-1. **Configure environment file**
+Bulk mode expects all nine image archives listed in the cloud quickstarts. This Docker Compose setup uses eight of them and does not run `private-sdk-mcp` or AI workflows. To push only the images used by Compose, run the script once for each available service image, using this form:
 
-   While building docker image locally, configure environment file to reference local image registry. Update _.env_ file in
-      `docker-compose` folder with environment variable referencing image registry.
-   ```properties
-   IMAGE_REGISTRY=<container_registry_url>
-   OAUTH2_CLIENT_SECRET=<your-secure-client-secret>
-   ```
+```bash
+bash scripts/aks/push-images.sh --tag latest localhost:5000 feature-service /path/to/extracted-images
+```
 
-   If customizing the copy sample data location on the system, please provide your desired path for the `SPATIAL_PATH` variable in the .env file. Otherwise, it will default to the path specified in the .env file.
+Compose image names are `resource-service`, `feature-service`, `tiling-service`, `mapping-service`, `composite-service`, `spatial-platform-ux-frontend`, `data-service`, and `samples-data`. For a remote registry, authenticate with `docker login` and replace `localhost:5000` with its registry/repository prefix. Set `IMAGE_REGISTRY` in `.env` to that same prefix.
 
-2. **service to start using docker compose file**
+## Step 2: Prepare Credentials
 
-   If you *always* want all the service to start you can run:
-   ```
-   docker compose up
-   ```
-3. **Cleanup of local services**
+Before the first start, replace the three placeholders in `../deploy/realm-spatial.json` with strong, unique values:
 
-   Regardless of any above method of running the services locally below cleanup command will be same.
+| Placeholder | Use |
+| --- | --- |
+| `REPLACE_WITH_SPATIAL_CLIENT_SECRET` | Secret for the `spatial` client. |
+| `REPLACE_WITH_SPATIAL_DATA_LOAD_CLIENT_SECRET` | Secret for the `spatial-data-load` client. |
+| `REPLACE_WITH_SPATIAL_ADMIN_PASSWORD` | Password for the realm's `admin` user. |
 
-   ```shell
-   docker compose down
-   ```
+Copy the two client-secret values exactly into the matching entries in `service-common.env`. The realm admin password is separate from the Keycloak bootstrap account, which is currently configured as `admin` / `admin` in `docker-compose.yml`. These are local-development credentials; do not use them in shared or production environments.
 
-## References
+The realm admin password is not temporary. After importing the realm, the configured password remains active. If Keycloak has already imported the realm, editing the JSON file alone does not change existing credentials. Update them in the Keycloak Admin Console, or recreate the Keycloak container to reimport the realm. Recreating it resets local Keycloak state; MongoDB data is stored separately in named volumes.
 
-- [Sample API Usage](../charts/private-spatial-apis/README.md)
-[🔗 Return to `Table of Contents` 🔗](../README.md##)
+## Step 3: Configure
+
+The stack reads configuration from:
+
+| File | Settings |
+| --- | --- |
+| `.env` | Compose profiles, image tag, host ports, data path, and MongoDB URI. |
+| `service-common.env` | Shared Spatial and OAuth2 application settings. |
+| `logging-vars.env` | Logging and Hibernate settings for services that load it. |
+| `../deploy/realm-spatial.json` | Realm, clients, roles, and sample users imported by Keycloak. |
+
+Review `.env` before starting. Set `SPATIAL_DATA_PATH` to an existing host folder if you do not want to use `C:/spatial`. `SPRING_MONGODB_URI` must use the Compose hostname `mongoDB` for connections from containers. Spatial images use `${IMAGE_REGISTRY}/<image-name>:${IMAGE_TAG}`; set `IMAGE_REGISTRY` to the registry/repository prefix where the images were pushed. The default, `localhost:5000`, requires a local registry to be running. The setup-resources entries in `.env` are not used by the current Compose file.
+
+`COMPOSE_PROFILES` currently enables all defined services: Keycloak, MongoDB, sample data, Resource, Feature, Tiling, Mapping, Composite, Spatial Platform frontend, and Data Service. To run a subset, edit the comma-separated profile list and include the dependencies required by the selected services.
+
+## Step 4: Start
+
+After the images are pushed and the registry is running, run these commands from the `docker-desktop` directory:
+
+```powershell
+docker compose pull
+docker compose up -d
+docker compose ps
+```
+
+## Step 5: Verify Services and Logs
+
+| Service | Local address / port |
+| --- | --- |
+| Keycloak | `http://localhost:8088` |
+| MongoDB | `localhost:27017` |
+| Resource Service | `http://localhost:8090` |
+| Feature Service | `http://localhost:8040` |
+| Tiling Service | `http://localhost:8060` |
+| Mapping Service | `http://localhost:8032` |
+| Composite Service | `http://localhost:8070` |
+| Spatial Platform frontend | `http://localhost:3000` |
+| Data Service | `http://localhost:8080` |
+
+Sample data maps host port `8075` to its configured debug port. Other Java services also expose debug ports; see `docker-compose.yml` for details.
+
+MongoDB has a health check. Resource Service waits for MongoDB to become healthy; Feature, Tiling, and Mapping wait for healthy MongoDB and for the Resource Service container to start. Resource Service has no Compose health check, so `service_started` does not guarantee application readiness. All services use `on-failure:5`; a successful one-shot sample-data run is not restarted.
+
+Check status and follow service logs with:
+
+```powershell
+docker compose ps -a
+docker compose logs -f resource-service keycloak
+```
+
+## Step 6: Stop and Reset
+
+Stop and remove the containers and network:
+
+```powershell
+docker compose down
+```
+
+This keeps the MongoDB named volumes. To remove the local database data as well, run `docker compose down -v`.
+
+## Related Guides
+
+- [Helm chart documentation](../charts/precisely-spatial-sdk/README.md)
+- [JDBC repository configuration](../docs/guides/JDBC-repository.md)
+- [Identity provider integration](../docs/guides/IDP-integration.md)
