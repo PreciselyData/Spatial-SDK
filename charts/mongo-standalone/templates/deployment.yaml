@@ -25,29 +25,46 @@ spec:
           command:
             - /bin/sh
             - -c
-            - "sleep 10 && exec mongod --replSet rs0 --bind_ip_all --port 27017"
-          lifecycle:
-            postStart:
-              exec:
-                command:
-                  - /bin/sh
-                  - -c
-                  - |
-                    until mongosh --quiet --eval "db.adminCommand('ping')" >/dev/null 2>&1; do
-                      sleep 1
-                    done
-                    mongosh --quiet --eval '
-                      try {
-                        rs.status();
-                      } catch (err) {
-                        const res = rs.initiate({
-                          _id: "rs0",
-                          members: [{ _id: 0, host: "127.0.0.1:27017" }]
-                        });
-                        if (res.ok !== 1) { quit(1); }
-                      }
-                    '
+            - |
+              # Replica set init runs in the background and retries, because the
+              # service FQDN may not resolve to this pod right after startup.
+              (
+                until mongosh --quiet --eval "db.adminCommand('ping')" >/dev/null 2>&1; do
+                  sleep 1
+                done
+                until mongosh --quiet --eval '
+                  const host = process.env.MONGO_MEMBER_HOST;
+                  let cfg = null;
+                  try { cfg = rs.conf(); } catch (err) {}
+                  if (cfg === null) {
+                    print("[replset-init] not initialized, initiating rs0 with member host " + host);
+                    const res = rs.initiate({
+                      _id: "rs0",
+                      members: [{ _id: 0, host: host }]
+                    });
+                    print("[replset-init] initiate result: " + JSON.stringify(res));
+                  } else if (cfg.members[0].host !== host) {
+                    print("[replset-init] member host is " + cfg.members[0].host + ", reconfiguring to " + host);
+                    cfg.members[0].host = host;
+                    const res = rs.reconfig(cfg, { force: true });
+                    print("[replset-init] reconfig result: " + JSON.stringify(res));
+                  } else {
+                    print("[replset-init] rs0 already configured with member host " + host + ", nothing to do");
+                  }
+                '; do
+                  echo "[replset-init] attempt failed, retrying in 5s"
+                  sleep 5
+                done
+              ) &
+              sleep 10
+              exec mongod --replSet rs0 --bind_ip_all --port 27017
           env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: MONGO_MEMBER_HOST
+              value: "$(POD_IP):27017"
             - name: MONGO_INITDB_ROOT_USERNAME
               value: "{{ .Values.credentials.rootUsername }}"
             - name: MONGO_INITDB_ROOT_PASSWORD
@@ -103,10 +120,6 @@ spec:
             timeoutSeconds: 1
             successThreshold: 1
             failureThreshold: 2
-          lifecycle:
-            preStop:
-              exec:
-                command: ["/bin/sh","-c","sleep 15"]
       volumes:
         {{- if .Values.persistent.pvc }}
         - name: mongodb
