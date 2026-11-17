@@ -230,11 +230,12 @@ If you don't have a MongoDB replica set currently, for your convenience, you can
 Create a persistent volume and install MongoDB from helm chart
 
 ```shell
+kubectl create namespace mongo
 kubectl apply -f ~/Spatial-SDK/deploy/gke/pvc.yaml -n mongo
 ```
 
 ```shell
-helm install mongo ~/Spatial-SDK/charts/mongo-standalone -n mongo --create-namespace --set persistent.pvc=data-volume-claim
+helm install mongo ~/Spatial-SDK/charts/mongo-standalone -n mongo --set persistent.pvc=data-volume-claim
 ```
 
 ```shell
@@ -329,11 +330,12 @@ If you don't have a Keycloak instance available currently, for your convenience,
 ### Deploy Keycloak by helm chart for testing
 
 ```shell
+kubectl create namespace keycloak
 kubectl apply -f ~/Spatial-SDK/deploy/gke/pvc.yaml -n keycloak
 ```
 
 ```shell
-helm install keycloak ~/Spatial-SDK/charts/keycloak-standalone -n keycloak --create-namespace \
+helm install keycloak ~/Spatial-SDK/charts/keycloak-standalone -n keycloak \
   --set adminUser=admin \
   --set adminPassword=admin \
   --set persistent.pvc=data-volume-claim
