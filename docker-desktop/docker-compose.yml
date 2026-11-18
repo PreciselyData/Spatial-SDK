@@ -1,17 +1,35 @@
 services:
-  mongo1:
+  keycloak:
+    platform: linux/amd64
+    image: quay.io/keycloak/keycloak:26.6.2
+    profiles:
+      - keycloak
+    command: start-dev --import-realm
+    environment:
+      - KC_BOOTSTRAP_ADMIN_USERNAME=admin
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=admin
+    ports:
+      - "${KEYCLOAK_HOST_PORT}:8080"
+    volumes:
+      - type: bind
+        source: "../deploy/realm-spatial.json"
+        target: "/opt/keycloak/data/import/Spatial-realm.json"
+    restart: "on-failure:5"
+
+  mongoDB:
     image: mongo:6.0.12
-    command: ["--replSet", "spatial-repo", "--bind_ip_all", "--port", "27017"]
+    profiles:
+      - mongoDB
+    command: [ "--replSet", "spatial-repo", "--bind_ip_all", "--port", "27017" ]
     deploy:
       resources:
         limits:
-          cpus: '4.00'
           memory: 4096M
         reservations:
           cpus: '0.25'
           memory: 2048M
     healthcheck:
-      test: echo "try { rs.status() } catch (err) { rs.initiate({_id:'spatial-repo',members:[{_id:0,host:'host.docker.internal:27017'}]}) }" | mongosh --port 27017 --quiet
+      test: ["CMD", "mongosh", "--port", "27017", "--quiet", "--eval", "try { rs.status() } catch (err) { rs.initiate({_id:'spatial-repo',members:[{_id:0,host:'mongoDB:27017'}]}) }"]
       interval: 10s
       timeout: 30s
       retries: 5
@@ -19,42 +37,23 @@ services:
     ports:
       - "27017:27017"
     volumes:
-      - "mongo1_data:/data/db"
-      - "mongo1_config:/data/configdb"
-    restart: always
-
-  spatialmanager-service:
-    image: ${IMAGE_REGISTRY}/spatialmanager-service:${TAG}
-    depends_on:
-      - namedresource-service
-    deploy:
-      resources:
-        limits:
-          cpus: '4.00'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 256M
-    ports:
-      - "8010:8080"
-      - "8011:8081"
-      - "8015:5005"
-    environment:
-      - OAUTH2.ENABLED=FALSE
-      - OAUTH2.ISSUERURI=https://keycloak.example.com
-      - OAUTH2.CLIENTID=spatial
-      # Use: export OAUTH2_CLIENT_SECRET=<your-secret> before running docker-compose
-      - OAUTH2.CLIENTSECRET=${OAUTH2_CLIENT_SECRET}
-      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+      - "mongoDB_data:/data/db"
+      - "mongoDB_config:/data/configdb"
+    networks:
+      - default
+      - spatial-shared
+    restart: "on-failure:5"
 
   samples-data:
-    image: ${IMAGE_REGISTRY}/samples-data:${TAG}
+    image: ${IMAGE_REGISTRY}/samples-data:${IMAGE_TAG}
+    profiles:
+      - samples-data
+    user: "0:0"
     depends_on:
-      - mongo1
+      - mongoDB
     deploy:
       resources:
         limits:
-          cpus: '4.00'
           memory: 512M
         reservations:
           cpus: '0.25'
@@ -62,130 +61,263 @@ services:
     ports:
       - "8075:5005"
     environment:
-      - SPRING_DATA_MONGODB_URI=mongodb://mongo1:27017/spatial-repository?replicaSet=spatial-repo
-      - samples.force.update=false
+      - SPRING_MONGODB_URI=${SPRING_MONGODB_URI}
+      - SPRING_DATA_MONGODB_URI=${SPRING_MONGODB_URI}
+      - samples.force.update=${SAMPLES_FORCE_UPDATE}
       - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
     volumes:
       - type: bind
-        source: ${SPATIAL_PATH}
+        source: "${SPATIAL_DATA_PATH}"
         target: "/opt/data"
+    restart: "on-failure:5"
 
-  namedresource-service:
-    image: ${IMAGE_REGISTRY}/namedresource-service:${TAG}
+  resource-service:
+    platform: linux/amd64
+    image: ${IMAGE_REGISTRY}/resource-service:${IMAGE_TAG}
+    profiles:
+      - resource-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - ./service-common.env
+      - ./logging-vars.env
     depends_on:
-      - mongo1
+      mongoDB:
+        condition: service_healthy
     deploy:
       resources:
         limits:
-          cpus: '4.00'
-          memory: 1024M
+          memory: 2048M
         reservations:
-          cpus: '0.25'
+          cpus: "0.25"
           memory: 512M
     ports:
-      - "8050:8080"
-      - "8051:8081"
-      - "8055:5005"
+      - "${RESOURCE_SERVICE_HOST_PORT}:8080"
+      - "5010:5005"
     environment:
-      - SPRING_DATA_MONGODB_URI=mongodb://mongo1:27017/spatial-repository?replicaSet=spatial-repo
-      - OAUTH2.ENABLED=FALSE
-      - OAUTH2.ISSUERURI=https://keycloak.example.com
-      - OAUTH2.CLIENTID=spatial
-      # Use: export OAUTH2_CLIENT_SECRET=<your-secret> before running docker-compose
-      - OAUTH2.CLIENTSECRET=${OAUTH2_CLIENT_SECRET}
-      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+      - SPRING_MONGODB_URI=${SPRING_MONGODB_URI}
+      - SPRING_DATA_MONGODB_URI=${SPRING_MONGODB_URI}
+      - RESOURCE_MONGODB_URL=${SPRING_MONGODB_URI}
+      - RESOURCE_MONGODB_NAME=spatial-repository
+      - OAUTH2_UNSECURED_PATHS=/actuator/**,/resource/swagger-ui/**,/resource/api-docs/**,/v1/spatial/security/token/**
+      - LD_LIBRARY_PATH=/app/native:/app/native/geopackage:/app/native/georaster:/app/native/geodatabase:/app/native/ecw:/app/native/mrsid
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -Djava.net.preferIPv4Addresses=true -Dnetworkaddress.cache.ttl=60 -Dnetworkaddress.cache.negative.ttl=0
+      - system.jna.library.path=/app/native/georaster
+      - system.com.mapinfo.midev.repository.factory=com.precisely.swp.repository.mongodb.MongoRepositoryFactory
     volumes:
       - type: bind
-        source: ${SPATIAL_PATH}
+        source: "${SPATIAL_DATA_PATH}"
         target: "/opt/data"
+    restart: "on-failure:5"
 
   feature-service:
-    image: ${IMAGE_REGISTRY}/feature-service:${TAG}
-    profiles: ["all"]
+    platform: linux/amd64
+    image: ${IMAGE_REGISTRY}/feature-service:${IMAGE_TAG}
+    profiles:
+      - feature-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - ./service-common.env
+      - ./logging-vars.env
     depends_on:
-      - mongo1
+      mongoDB:
+        condition: service_healthy
+      resource-service:
+        condition: service_started
     deploy:
       resources:
         limits:
-          cpus: '4.00'
           memory: 2048M
         reservations:
           cpus: '0.25'
           memory: 512M
     ports:
-      - "8040:8080"
-      - "8041:8081"
-      - "8045:5005"
+      - "${FEATURE_SERVICE_HOST_PORT}:8080"
+      - "5006:5005"
     environment:
-      - SPRING_DATA_MONGODB_URI=mongodb://mongo1:27017/spatial-repository?replicaSet=spatial-repo
-      - OAUTH2.ENABLED=FALSE
-      - OAUTH2.ISSUERURI=https://keycloak.example.com
-      - OAUTH2.CLIENTID=spatial
-      # Use: export OAUTH2_CLIENT_SECRET=<your-secret> before running docker-compose
-      - OAUTH2.CLIENTSECRET=${OAUTH2_CLIENT_SECRET}
-      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+      - SPRING_MONGODB_URI=${SPRING_MONGODB_URI}
+      - SPRING_DATA_MONGODB_URI=${SPRING_MONGODB_URI}
+      - system.ogc.registry-type=private
+      - landing-page-url=${OGC_API_FEATURES_LANDING_PAGE_URL}
+      - RESOURCE_URL=http://resource-service:8080/
+      - OAUTH2_UNSECURED_PATHS=/actuator/**,/resource/swagger-ui/**,/feature/swagger-ui/**,/feature/api-docs/**
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -Dogc.registry-type=private
+      - SWAGGER_SERVER_URL=${SWAGGER_BASE_URL}:${FEATURE_SERVICE_HOST_PORT}
     volumes:
       - type: bind
-        source: ${SPATIAL_PATH}
+        source: "${SPATIAL_DATA_PATH}"
         target: "/opt/data"
+    restart: "on-failure:5"
+
+  tiling-service:
+    platform: linux/amd64
+    image: ${IMAGE_REGISTRY}/tiling-service:${IMAGE_TAG}
+    profiles:
+      - tiling-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - ./service-common.env
+    depends_on:
+      mongoDB:
+        condition: service_healthy
+      resource-service:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 2048M
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+    ports:
+      - "${TILING_SERVICE_HOST_PORT}:8080"
+      - "5007:5005"
+    environment:
+      - SPRING_MONGODB_URI=${SPRING_MONGODB_URI}
+      - SPRING_DATA_MONGODB_URI=${SPRING_MONGODB_URI}
+      - RESOURCE_URL=http://resource-service:8080/
+      - OAUTH2_UNSECURED_PATHS=/actuator,/tiling/swagger-ui/**,/tiling/api-docs/**
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -Dcom.mapinfo.midev.repository.factory=com.precisely.dis.spatial.repository.resource.ResourceRepositoryFactory
+      - system.com.mapinfo.midev.repository.factory=com.precisely.dis.spatial.repository.resource.ResourceRepositoryFactory
+      - SWAGGER_SERVER_URL=${SWAGGER_BASE_URL}:${TILING_SERVICE_HOST_PORT}
+    volumes:
+      - type: bind
+        source: "${SPATIAL_DATA_PATH}"
+        target: "/opt/data"
+    restart: "on-failure:5"
 
   mapping-service:
-    image: ${IMAGE_REGISTRY}/mapping-service:${TAG}
+    platform: linux/amd64
+    image: ${IMAGE_REGISTRY}/mapping-service:${IMAGE_TAG}
+    profiles:
+      - mapping-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - ./service-common.env
     depends_on:
-      - mongo1
+      mongoDB:
+        condition: service_healthy
+      resource-service:
+        condition: service_started
     deploy:
       resources:
         limits:
-          cpus: '4.00'
-          memory: 1024M
+          memory: 2048M
         reservations:
           cpus: '0.25'
           memory: 512M
     ports:
-      - "8032:8080"
-      - "8031:8081"
-      - "8035:5005"
+      - "${MAPPING_SERVICE_HOST_PORT}:8080"
+      - "5008:5005"
     environment:
-      - SPRING_DATA_MONGODB_URI=mongodb://mongo1:27017/spatial-repository?replicaSet=spatial-repo
-      - OAUTH2.ENABLED=FALSE
-      - OAUTH2.ISSUERURI=https://keycloak.example.com
-      - OAUTH2.CLIENTID=spatial
-      # Use: export OAUTH2_CLIENT_SECRET=<your-secret> before running docker-compose
-      - OAUTH2.CLIENTSECRET=${OAUTH2_CLIENT_SECRET}
-      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+      - SPRING_MONGODB_URI=${SPRING_MONGODB_URI}
+      - SPRING_DATA_MONGODB_URI=${SPRING_MONGODB_URI}
+      - RESOURCE_URL=http://resource-service:8080/
+      - OAUTH2_UNSECURED_PATHS=/actuator/**,/mapping/swagger-ui/**,/mapping/api-docs/**
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -Dcom.mapinfo.midev.repository.factory=com.precisely.dis.spatial.repository.resource.ResourceRepositoryFactory
+      - system.com.mapinfo.midev.repository.factory=com.precisely.dis.spatial.repository.resource.ResourceRepositoryFactory
+      - SWAGGER_SERVER_URL=${SWAGGER_BASE_URL}:${MAPPING_SERVICE_HOST_PORT}
+      - WMS_NAMED_LAYER_ENABLED=true
     volumes:
       - type: bind
-        source: ${SPATIAL_PATH}
+        source: "${SPATIAL_DATA_PATH}"
         target: "/opt/data"
-  tiling-service:
-    image: ${IMAGE_REGISTRY}/tiling-service:${TAG}
-    profiles: ["all"]
+    restart: "on-failure:5"
+        
+  composite-service:
+    platform: linux/amd64
+    image: ${IMAGE_REGISTRY}/composite-service:${IMAGE_TAG}
+    profiles:
+      - composite-service
+    env_file:
+      - ./service-common.env
     depends_on:
-      - mongo1
+      - mongoDB
     deploy:
       resources:
         limits:
-          cpus: '4.00'
-          memory: 1024M
+          memory: 2048M
         reservations:
-          cpus: '0.25'
+          cpus: "0.25"
           memory: 512M
     ports:
-      - "8060:8080"
-      - "8061:8081"
-      - "8065:5005"
+      - "${COMPOSITE_SERVICE_HOST_PORT}:8080"
+      - "5009:5005"
     environment:
-      - SPRING_DATA_MONGODB_URI=mongodb://mongo1:27017/spatial-repository?replicaSet=spatial-repo
-      - OAUTH2.ENABLED=FALSE
-      - OAUTH2.ISSUERURI=https://keycloak.example.com
-      - OAUTH2.CLIENTID=spatial
-      # Use: export OAUTH2_CLIENT_SECRET=<your-secret> before running docker-compose
-      - OAUTH2.CLIENTSECRET=${OAUTH2_CLIENT_SECRET}
+      - AUTH_ENABLED=FALSE
+      - POLICY_AUTH_ENABLED=FALSE
+      - REDIS_ENABLED=FALSE
+      - SPRING_MONGODB_URI=${SPRING_MONGODB_URI}
+      - SPRING_DATA_MONGODB_URI=${SPRING_MONGODB_URI}
+      - MONGO_CONNECTION_STRING=${SPRING_MONGODB_URI}
+      - MONGO_AUTH_MECHANISM=MONGODB
       - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+    restart: "on-failure:5"
+
+  spatial-platform-frontend:
+    platform: linux/amd64
+    image: ${IMAGE_REGISTRY}/spatial-platform-ux-frontend:${IMAGE_TAG}
+    profiles:
+      - spatial-platform-frontend
+    depends_on:
+      - resource-service
+      - mongoDB
+    ports:
+      - "${SPATIAL_PLATFORM_FRONTEND_HOST_PORT}:3000"
+    environment:
+      - PLATFORM_TILING_URL=http://tiling-service:8080
+      - PLATFORM_MAPPING_URL=http://mapping-service:8080
+      - PLATFORM_FEATURE_URL=http://feature-service:8080
+      - PLATFORM_RESOURCE_URL=http://resource-service:8080
+      - PLATFORM_SERVICE_URL=http://spatial-ui-platform-service:8086
+      - PLATFORM_KEYCLOAK_URL=http://keycloak:8080
+      - DOCKER_MONGO_URL=mongodb://mongoDB:27017/?directConnection=true
+      - PLATFORM_USER_EMAIL=spatial-team@precisely.com
+      - PLATFORM_PG_HOST=cdpr-sample
+      - PLATFORM_PG_PORT=5432
+      - PLATFORM_PG_DATABASE=precisely_db
+      - PLATFORM_PG_USER=postgres
+      - PLATFORM_PG_PASSWORD=postgres
+      - BFF_OVERLAY_ENABLED=true
+      - BING_MAPS_PUBLIC_KEY=AhW2B-pxbzo88zBHsBowhgmi0-B7Qi1TRcDmCvP7IfgjbbqoOL53CQhRMJdlcI2K
+    restart: "on-failure:5"
+
+  data-service:
+    platform: linux/amd64
+    image: ${IMAGE_REGISTRY}/data-service:${IMAGE_TAG}
+    profiles:
+      - data-service
+    ports:
+      - "8080:8080"
+      - "5011:5005"
+    env_file:
+      - ./service-common.env
+    environment:
+      - SPRING_MONGODB_URI=${SPRING_MONGODB_URI}
+      - SPRING_DATA_MONGODB_URI=${SPRING_MONGODB_URI}
+      - RESOURCE_MONGODB_URL=${SPRING_MONGODB_URI}
+      - RESOURCE_MONGODB_NAME=spatial-repository
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+      - JAVA_OPTS=-Dcom.pb.midev.dp.jfal.native.dir=/app/native/georaster
+      - RESOURCE_SERVICE_URL=${RESOURCE_SERVICE_URL}
+      - RESOURCE_CREATOR_URL=${RESOURCE_CREATOR_URL}
+      - RESOURCE_CREATOR_INTERNAL_KEY=${INTERNAL_KEY}
+      - DATA_PATH=/opt/data
     volumes:
       - type: bind
-        source: ${SPATIAL_PATH}
+        source: "${SPATIAL_DATA_PATH}"
         target: "/opt/data"
+    restart: "on-failure:5"
+
 volumes:
-  mongo1_data:
-  mongo1_config:
+  mongoDB_data:
+    name: docker-compose_mongoDB_data
+  mongoDB_config:
+    name: docker-compose_mongoDB_config
+
+networks:
+  spatial-shared:
+    name: spatial-shared

@@ -6,6 +6,7 @@
   "clients": [
     {
       "clientId": "spatial-data-load",
+      "secret": "REPLACE_WITH_SPATIAL_DATA_LOAD_CLIENT_SECRET",
       "enabled": true,
       "publicClient": false,
       "directAccessGrantsEnabled": false,
@@ -17,6 +18,7 @@
     },
     {
       "clientId": "spatial",
+      "secret": "REPLACE_WITH_SPATIAL_CLIENT_SECRET",
       "enabled": true,
       "publicClient": false,
       "directAccessGrantsEnabled": true,
@@ -78,6 +80,13 @@
       "firstName": "Admin",
       "lastName": "User",
       "email": "admin@test.com",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "REPLACE_WITH_SPATIAL_ADMIN_PASSWORD",
+          "temporary": false
+        }
+      ],
       "requiredActions": [],
       "clientRoles": { "spatial": ["admin"] }
     },
