@@ -404,7 +404,7 @@ In your newly created realm, update and copy both client secrets:
 kubectl edit cm spatial-config -n spatial-sdk
 ```
 
-Update the following properties with the values below,
+Set these properties to the values for your realm:
 
 ```yaml
 ...
@@ -417,27 +417,38 @@ spring.security.oauth2.resourceserver.jwt.issuer-uri: "http://<ingress external 
 ...
 ```
 
-> NOTE: the property `oauth2.required-authority` restricts service access to the users who have at least the ’user’ client role by default. It can be configured to any spatial client roles. A value "" will disable the restriction.
+> **Note:** `oauth2.required-authority` restricts access to users with at least the `user` client role by default. You can set it to another Spatial client role, or leave it empty (`""`) to disable the restriction.
 
-Restart all services to pick up the configuration changes
+After saving the ConfigMap, follow these steps in a Bash-compatible terminal (Bash, Git Bash, or WSL). Keep the same terminal open for steps 1 and 2.
 
-```shell
-kubectl rollout restart deployment -n spatial-sdk 
-```
+**1. Generate a session secret**
 
-Wait for all pods are ready
+`session.secret` is a server-only secret for encrypting and authenticating session cookies. Use a random value of at least 32 characters (or a JSON keyring for rotation); all frontend replicas must share the same value. This command generates a 44-character Base64 value.
 
 ```shell
-kubectl get pod -n spatial-sdk 
+SESSION_SECRET=$(openssl rand -base64 32)
 ```
 
-Login to Precisely Spatial when all services are ready with the password configured for `admin` in Keycloak.
+**2. Create the Kubernetes secret**
+
+```shell
+kubectl create secret generic platform-secrets \
+  -n spatial-sdk \
+  --from-literal="session.secret=${SESSION_SECRET}"
+```
+
+**3. Restart the deployments and wait for the pods to become ready**
+
+```shell
+kubectl rollout restart deployment -n spatial-sdk
+kubectl get pods -n spatial-sdk --watch
+```
+
+Once all pods are ready, sign in to Precisely Spatial with the `admin` password configured in Keycloak:
 
 `https://<your external ip>/spatial`
 
-Verify if you can preview a map in Precisely Spatial.
-
-Please follow the user guide for how to apply permissions and other security related topics.
+Verify that you can preview a map. See the user guide for details on permissions and other security topics.
 
 ### IDP Federation
 
