@@ -321,7 +321,7 @@ kubectl get services -o wide  nginx-ingress-ingress-nginx-controller
 ```
 
 
-After all the pods in namespace 'spatial-sdk' are in 'ready' status, launch SpatialServerManager in a browser with the URL below (You may need to accept the default self-signed certificate from Ingress. Check out the ingress document on how to change the certificate if you need). By default, the security is off, so you can log in with any username/password. You should be able to browser named resources and pre-view maps. The link to Spatial Manager: `https://<your external ip>/SpatialServerManager`
+After all the pods in namespace 'spatial-sdk' are in 'ready' status, launch platform UI in a browser with the URL below (You may need to accept the default self-signed certificate from Ingress. Check out the ingress document on how to change the certificate if you need). By default, the security is off, so you can log in with any username/password. You should be able to browser named resources and pre-view maps. The link to Platform UI: `https://<your external ip>/spatial`
 
 
 You can check HPA status while services are running

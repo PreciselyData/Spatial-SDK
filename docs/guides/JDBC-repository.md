@@ -6,7 +6,7 @@ In addition to MongoDB, Precisely Spatial SDK resource repository is now able to
 
 | Repository Type | Suitable For | Considerations |
 | --------------- | ------------ | -------------- |
-| File-based | feature service only deployment, no SpatialManager | read only, small number of resources (<1000) |
+| File-based | feature service only deployment, no Platform UI | read only, small number of resources (<1000) |
 | SQL Server | full deployment | read/write, middle number of resources (<5,000), less concurrent modification |
 | PostgreSQL | full deployment | read/write, large number of resources (<20,000) |
 | MongoDB | full deployment | read/write, large number of resources (>20,000) |

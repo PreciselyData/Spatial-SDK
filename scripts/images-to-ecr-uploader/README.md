@@ -1,45 +1,39 @@
-# Download and Upload Docker Images to ECR
+# Download and Upload Docker Images to Amazon ECR
 
-## Description
+This script downloads the latest available **Spatial SDK Docker Image** delivery from Precisely Data Experience (PDX), extracts its Docker image archives, and pushes the images to Amazon Elastic Container Registry (ECR).
 
-Private Spatial APIs helm chart relies on the availability of Docker images for several essential microservices, all of
-which are conveniently obtainable from Precisely Data Experience. The required docker images include:
-1. Feature Service Docker Image
-2. Mapping Service Docker Image
-3. Tiling Service Docker Image
-4. NamedResource Service Docker Image
-5. Spatial Manager Docker Image 
-6. Sample Data Upload Docker Image 
+Access to the PDX product requires a subscription. Contact Precisely or visit [Precisely Data Experience](https://data.precisely.com/) to request access.
 
-> [!NOTE]:  
-> Contact Precisely for buying subscription to docker image
->
+## Prerequisites
 
-Once you have purchased a subscription to Precisely Data Experience (PDX), you can directly download Docker images.
-Afterward, you can easily load these Docker images into your Docker environment.
+- Python and the packages listed in `requirements.txt`
+- Docker installed and running
+- AWS CLI installed and available on `PATH`
+- PDX API key and shared secret with access to the product
+- AWS credentials with permission to identify the account, authenticate to ECR, create repositories when needed, and push images
 
-Additionally, this repository includes a script that facilitates the download of Docker image zips from PDX and their
-subsequent upload to AWS ECR.
+AWS credentials can be supplied as command-line options or through the AWS CLI's configured credential chain.
 
-Please note that this project assumes the presence of Python, Docker, and awscli on your system.
+## Install Python requirements
 
-## Step 1 - Install Requirements
-
-Run the following command to install requirements:
+From this directory, run:
 
 ```console
-pip install -r ./requirements.txt
+pip install -r requirements.txt
 ```
 
-## Step 2: Run Script for Uploading to ECR
+## Run the uploader
 
-The following command downloads the docker images from PDX and uploads it to your Elastic Container Registry.
-
-> [!NOTE]:
-> You need to have docker running locally for this script to work.
->
+From this directory, run:
 
 ```console
-python upload_ecr.py --pdx-api-key [pdx-api-key] --pdx-api-secret [pdx-secret] --aws-access-key [aws-access-key] --aws-secret [aws-secret] --aws-region [aws-region]
+python upload_ecr.py --pdx-api-key <pdx-api-key> --pdx-api-secret <pdx-api-secret> --aws-region <aws-region> --aws-access-key <aws-access-key> --aws-secret-key <aws-secret-key>
 ```
+
+The AWS options are optional if AWS credentials are already configured. The region defaults to `us-east-1`. To use a different local staging location, add `--local-path <directory>`; by default, the script uses the current working directory.
+
+For each `.tar` archive in the downloaded delivery, the script loads the image into Docker, creates an ECR repository if it does not already exist, tags the image with `1.3.3`, and pushes it. The script prints the ECR image URIs when uploads succeed.
+
+> **Note:** The script uses a `docker_images` directory under the selected local path for downloads and extraction, then deletes that directory when it finishes. Do not place files you need to keep in that directory.
+
 [🔗 Return to `Table of Contents` 🔗](../../README.md#components)
